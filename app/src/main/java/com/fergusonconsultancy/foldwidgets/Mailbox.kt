@@ -109,8 +109,9 @@ object Mailbox {
         val outlook = "com.microsoft.office.outlook"
         val gmail = "com.google.android.gm"
         return when {
+            // Mechack reads both accounts in Outlook: every email opens there (31 Oct)
             Mail.installed(c, outlook) -> outlook
-            kind == GMAIL && Mail.installed(c, gmail) -> gmail
+            Mail.installed(c, gmail) -> gmail
             else -> outlook
         }
     }
@@ -196,7 +197,7 @@ object Mailbox {
     }
 
     /** Both inboxes as last read, newest first. [fresh] means unread. */
-    fun items(c: Context, links: Map<String, android.app.PendingIntent>): List<MailItem> =
+    fun items(c: Context): List<MailItem> =
         listOf(GMAIL, OUTLOOK).filter { address(c, it) != null }.flatMap { kind ->
             val pkg = openPackage(c, kind)
             runCatching {
@@ -205,7 +206,7 @@ object Mailbox {
                     val o = arr.getJSONObject(i)
                     val sender = o.optString("s"); val subject = o.optString("j")
                     MailItem(o.optString("k"), pkg, sender, subject, o.optString("v"), o.optString("a"), o.optLong("t"),
-                        links["${sender.lowercase()}|${subject.lowercase()}"], o.optBoolean("u"), o.optString("l"), kind)
+                        Mail.linkFor(sender, subject), o.optBoolean("u"), o.optString("l"), kind)
                 }
             }.getOrDefault(emptyList())
         }.sortedByDescending { it.time }
@@ -230,7 +231,8 @@ object Mailbox {
     fun opening(text: String): String = text
         .replace(Regex("(?s)<style.*?</style>|<script.*?</script>"), " ")
         .let { if (it.contains('<') && it.contains('>')) android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_COMPACT).toString() else it }
-        .replace(' ', ' ').replace(Regex("[\\u200B-\\u200D\\uFEFF\\u034F]"), "")
+        .replace('\u00A0', ' ').replace(Regex("[\\u200B-\\u200D\\uFEFF\\u034F\\uFFFC\\uFFFD]"), "")
+        .replace(Regex("[-_=*~]{3,}"), " ")
         .replace(Regex("\\s+"), " ").trim().take(200)
 }
 
@@ -263,10 +265,8 @@ object Gmail {
             inbox.fetch(msgs, FetchProfile().apply {
                 add(FetchProfile.Item.ENVELOPE); add(FetchProfile.Item.FLAGS); add(UIDFolder.FetchProfileItem.UID)
             })
-            val threads = threads(inbox, chosen)
             val items = msgs.reversed().mapIndexed { i, m ->
                 val uid = inbox.getUID(m)
-                val thread = threads[m.messageNumber]
                 val key = "g$uid"
                 val from = m.from?.firstOrNull() as? InternetAddress
                 val sender = from?.personal?.takeIf { it.isNotBlank() } ?: from?.address.orEmpty()
@@ -275,7 +275,7 @@ object Gmail {
                 MailItem(key, "", sender, m.subject.orEmpty().trim(), preview, address,
                     (m.receivedDate ?: m.sentDate)?.time ?: 0L, null,
                     fresh = !m.flags.contains(javax.mail.Flags.Flag.SEEN),
-                    link = thread?.let { "https://mail.google.com/mail/u/${Uri.encode(address)}/#inbox/" + java.lang.Long.toHexString(it) }.orEmpty(),
+                    link = "",
                     source = Mailbox.GMAIL)
             }
             inbox.close(false)
@@ -384,9 +384,17 @@ object Microsoft {
     fun fetch(c: Context, focusedOnly: Boolean): List<MailItem> {
         val token = accessToken(c)
         val url = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?\$top=50" +
-            "&\$select=id,subject,bodyPreview,receivedDateTime,isRead,from,inferenceClassification" +
+            "&\$select=id,subject,bodyPreview,receivedDateTime,isRead,from,inferenceClassification,internetMessageId" +
             "&\$orderby=" + URLEncoder.encode("receivedDateTime desc", "UTF-8")
         val list = JSONObject(get(url, token)).optJSONArray("value") ?: JSONArray()
+        // Outlook's own link to one email carries both of Microsoft's ids for it, as Microsoft To Do's
+        // "Open in Outlook" does; the immutable one comes from the same list asked for in that form
+        val immutable = runCatching {
+            val alt = JSONObject(get("https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?\$top=50" +
+                "&\$select=id,internetMessageId&\$orderby=" + URLEncoder.encode("receivedDateTime desc", "UTF-8"),
+                token, immutableIds = true)).optJSONArray("value") ?: JSONArray()
+            (0 until alt.length()).map { alt.getJSONObject(it) }.associate { it.optString("internetMessageId") to it.optString("id") }
+        }.getOrDefault(emptyMap())
         val addr = Mailbox.address(c, Mailbox.OUTLOOK).orEmpty()
         return (0 until list.length()).map { list.getJSONObject(it) }
             .filter { !focusedOnly || it.optString("inferenceClassification") != "other" }
@@ -400,7 +408,9 @@ object Microsoft {
                     runCatching { java.time.Instant.parse(o.optString("receivedDateTime")).toEpochMilli() }.getOrDefault(0L), null,
                     fresh = !o.optBoolean("isRead", true),
                     // Outlook's own link to one message (the form Microsoft To Do uses to open an email)
-                    link = "ms-outlook://emails/message/open?restID=${Uri.encode(id)}&account=${Uri.encode(addr)}",
+                    link = "ms-outlook://emails/message/open?restID=${Uri.encode(id)}" +
+                        (immutable[o.optString("internetMessageId")]?.let { "&immutableID=${Uri.encode(it)}" } ?: "") +
+                        "&account=${Uri.encode(addr)}",
                     source = Mailbox.OUTLOOK)
             }
     }
@@ -437,11 +447,12 @@ object Microsoft {
         o.optString("refresh_token").takeIf { it.isNotBlank() }?.let { Vault.put(c, "outlook", it) }
     }
 
-    private fun get(url: String, token: String): String {
+    private fun get(url: String, token: String, immutableIds: Boolean = false): String {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000; readTimeout = 20_000
             setRequestProperty("Authorization", "Bearer $token")
             setRequestProperty("Accept", "application/json")
+            if (immutableIds) setRequestProperty("Prefer", "IdType=\"ImmutableId\"")
         }
         val code = conn.responseCode
         if (code == 401) { access = null; throw java.io.IOException("Outlook token expired") }

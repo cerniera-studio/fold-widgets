@@ -65,6 +65,20 @@ object Mail {
 
     /** Links into each email, while its app still honours them. Held in memory only. */
     private val links = java.util.concurrent.ConcurrentHashMap<String, PendingIntent>()
+    /** The same links by subject alone, normalised, for when the sender is written differently. */
+    private val bySubject = java.util.concurrent.ConcurrentHashMap<String, PendingIntent>()
+
+    private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
+
+    private fun keep(m: MailItem) {
+        val open = m.open ?: return
+        links[m.id] = open
+        if (m.subject.length >= 4) bySubject[norm(m.subject)] = open
+    }
+
+    /** Outlook's own link into an email it announced, kept from its notification: opens that email for either account. */
+    fun linkFor(sender: String, subject: String): PendingIntent? =
+        links["${sender.lowercase()}|${subject.lowercase()}"] ?: bySubject[norm(subject)]
 
     /** The emails announced right now by the chosen apps. */
     private fun onScreen(c: Context): List<MailItem> {
@@ -79,13 +93,13 @@ object Mail {
     @Synchronized fun remember(c: Context) {
         // With an inbox connected the notifications are not listed, but their links into each email
         // are still the surest way in, so they are kept while they live
-        if (Mailbox.connected(c)) { onScreen(c).forEach { m -> m.open?.let { links[m.id] = it } }; return }
+        if (Mailbox.connected(c)) { onScreen(c).forEach { keep(it) }; return }
         if (!enabled(c)) return
         val now = onScreen(c)
         if (now.isEmpty()) return
         val kept = load(c).associateBy { it.id }.toMutableMap()
         for (m in now) {
-            m.open?.let { links[m.id] = it }
+            keep(m)
             val old = kept[m.id]
             kept[m.id] = if (old == null || m.time >= old.time) m else old
         }
@@ -97,7 +111,7 @@ object Mail {
         // With an inbox connected, the inbox is the truth; notifications only lend their links
         if (Mailbox.connected(c)) {
             remember(c)
-            return Mailbox.items(c, links).take(KEEP)
+            return Mailbox.items(c).take(KEEP)
         }
         if (!enabled(c)) return emptyList()
         remember(c)
@@ -317,7 +331,7 @@ object MailPainter : Painter {
     private fun open(c: Context, m: MailItem, inbox: Act?): Act? {
         val app = c.packageManager.getLaunchIntentForPackage(m.pkg)
         val deep = m.link.takeIf { it.isNotEmpty() }?.let {
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it)).setPackage(if (m.source == Mailbox.GMAIL) GMAIL_APP else OUTLOOK_APP)
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it)).setPackage(OUTLOOK_APP)
         }
         if (m.open == null && deep == null) return app?.let { Act.Open(intent = it) } ?: inbox
         return Act.Open(pending = m.open, intent = deep ?: app, fallback = if (deep != null) app else null)
