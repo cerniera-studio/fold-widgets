@@ -135,6 +135,17 @@ class SettingsActivity : Activity() {
             }
 
             if (gmail != null || outlook != null) {
+                addView(row("Link report", "Finds which links your Outlook accepts for opening one email, and what your last email taps did. Contains no emails or addresses.",
+                    button("Make report", primary = false) {
+                        toast("Reading Outlook… this takes a few seconds")
+                        Thread {
+                            val text = runCatching { Probe.report(applicationContext) }.getOrElse { "Report failed: $it" }
+                            runOnUiThread {
+                                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                                    .putExtra(Intent.EXTRA_TEXT, text).putExtra(Intent.EXTRA_SUBJECT, "Fold Widgets link report"), "Share the report"))
+                            }
+                        }.start()
+                    }))
                 val main = Mailbox.mainOnly(this@SettingsActivity)
                 addView(row("Primary and Focused only", if (main) "As the apps notify: Gmail's Primary tab, Outlook's Focused inbox" else "Everything in both inboxes, promotions included",
                     button(if (main) "Show all" else "Main only", primary = false) {

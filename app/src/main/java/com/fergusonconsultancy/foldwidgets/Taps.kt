@@ -37,15 +37,19 @@ class TapActivity : Activity() {
             // This activity is in front, so it may start the other app's screen on its behalf
             val options = ActivityOptions.makeBasic()
             if (Build.VERSION.SDK_INT >= 34) options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
-            val ok = runCatching { pending.send(this, 0, null, null, null, null, options.toBundle()) }.isSuccess
-            if (ok) return
+            val sent = runCatching { pending.send(this, 0, null, null, null, null, options.toBundle()) }
+            if (opened in Mail.APPS.keys) Probe.note(this, "Notification link", sent.exceptionOrNull())
+            if (sent.isSuccess) return
         }
         if (target?.getStringExtra(EXTRA_RESOLVE) == RESOLVE_WEATHER) { weather(); return }
         // The exact thing first (an email in its app), then the app itself if that cannot be opened
         @Suppress("DEPRECATION")
         val fallback = intent.getParcelableExtra<Intent>(Widgets.EXTRA_FALLBACK)
         for (each in listOfNotNull(target, fallback)) {
-            if (runCatching { startActivity(each.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+            val started = runCatching { startActivity(each.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            // Which way an email tap actually went, so it can be read back from settings
+            if (opened in Mail.APPS.keys) Probe.note(this, if (each.data != null) "Message link ${each.data?.scheme}://${each.data?.host}${each.data?.path}" else "Outlook itself (fallback)", started.exceptionOrNull())
+            if (started.isSuccess) return
         }
     }
 
