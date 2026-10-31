@@ -55,6 +55,7 @@ class RefreshJob : JobService() {
             try {
                 when (params.jobId) {
                     WEATHER, WEATHER_NOW -> { runCatching { Weather.refresh(this) }; Widgets.renderAll(this, Kind.WEATHER) }
+                    MAIL -> runCatching { Mailbox.sync(this) }
                     CALENDAR -> { Widgets.renderAll(this, Kind.AGENDA); Widgets.renderAll(this, Kind.MONTH); Clockwork.arm(this) }
                 }
             } finally { jobFinished(params, false) }
@@ -68,9 +69,22 @@ class RefreshJob : JobService() {
         const val WEATHER = 1
         const val CALENDAR = 2
         const val WEATHER_NOW = 3
+        const val MAIL = 4
+
+        /** The inboxes, every 15 minutes (Android's shortest), only with a network. */
+        fun scheduleMail(c: Context) {
+            val js = c.getSystemService(JobScheduler::class.java)
+            if (!Mailbox.connected(c) || Widgets.ids(c, Kind.MAIL).isEmpty()) { js.cancel(MAIL); return }
+            if (js.getPendingJob(MAIL) != null) return
+            js.schedule(JobInfo.Builder(MAIL, ComponentName(c, RefreshJob::class.java))
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setPeriodic(15 * 60_000L)
+                .build())
+        }
 
         /** The weather, about every half hour, only with a network. */
         fun schedule(c: Context) {
+            scheduleMail(c)
             val js = c.getSystemService(JobScheduler::class.java)
             if (Widgets.ids(c, Kind.WEATHER).isEmpty()) { js.cancel(WEATHER); return }
             if (js.getPendingJob(WEATHER) != null) return

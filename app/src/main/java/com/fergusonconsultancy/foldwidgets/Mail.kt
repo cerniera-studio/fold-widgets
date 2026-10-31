@@ -87,6 +87,11 @@ object Mail {
 
     /** What arrived, newest first, each marked new if its notification is still up. */
     fun items(c: Context): List<MailItem> {
+        // With an inbox connected, the inbox is the truth; notifications only lend their links
+        if (Mailbox.connected(c)) {
+            if (enabled(c)) remember(c)
+            return Mailbox.items(c, links).take(KEEP)
+        }
         if (!enabled(c)) return emptyList()
         remember(c)
         val fresh = onScreen(c).map { it.id }.toSet()
@@ -162,7 +167,8 @@ object MailPainter : Painter {
         val inbox = Mail.openInbox(c)
         hits += Hit(RectF(0f, 0f, s.w, s.h), inbox ?: Act.Open(intent = Intent(c, SettingsActivity::class.java)), "Open mail")
 
-        if (!Mail.enabled(c) || !Media.allowed(c)) {
+        val boxes = Mailbox.connected(c)
+        if (!boxes && (!Mail.enabled(c) || !Media.allowed(c))) {
             val titleP = c.ink(24f, s.ink(s.w / 2, s.h / 2), display = true)
             canvas.textTop("Mail", p, p, titleP)
             val noteP = c.ink(13f, s.muted(s.w / 2, s.h / 2), 450)
@@ -193,11 +199,17 @@ object MailPainter : Painter {
         val headW = s.w - p - tx
         val inboxP = c.ink(if (bare) 13f else 15f, s.ink(tx + 30f, p + 6f), 600)
         val subP = c.ink(13f, s.muted(tx + 30f, p + capNum), 450)
-        val heading = when { fresh == 1 -> "New email"; fresh > 1 -> "New emails"; else -> "Recent mail" }
+        val heading = when {
+            boxes -> if (fresh > 0) "Unread" else "Inbox"
+            fresh == 1 -> "New email"; fresh > 1 -> "New emails"; else -> "Recent mail"
+        }
         if (bare) canvas.drawText(fit(heading, inboxP, headW), tx, p + capNum, inboxP)
         else {
             canvas.textTop(fit(heading, inboxP, headW), tx, p + 1f, inboxP)
+            val warning = if (boxes) Mailbox.warning(c) else null
+            if (warning != null) subP.color = s.accent(tx + 30f, p + capNum)
             val sub = when {
+                warning != null -> warning
                 accounts.size > 1 -> "${accounts.size} accounts"
                 accounts.size == 1 -> accounts[0]
                 else -> Mail.apps(c).filter { Mail.installed(c, it) }.mapNotNull { Mail.APPS[it] }.joinToString(" · ")
@@ -208,9 +220,9 @@ object MailPainter : Painter {
 
         if (items.isEmpty()) {
             val emptyP = c.ink(22f, s.ink(s.w / 2, y + 12f), display = true)
-            canvas.textTop("No mail yet", p, y + 2f, emptyP)
+            canvas.textTop(if (boxes) "Inbox empty" else "No mail yet", p, y + 2f, emptyP)
             val noteP = c.ink(13f, s.muted(s.w / 2, y + 34f), 450)
-            wrap("Emails appear here as they arrive, and stay for a week", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
+            wrap(if (boxes) "Nothing waiting in the inbox" else "Emails appear here as they arrive, and stay for a week", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
                 canvas.textTop(l, p, y + 2f + emptyP.textSize * 1.3f + i * noteP.textSize * 1.3f, noteP)
             }
             return Scene(hits)
@@ -238,7 +250,7 @@ object MailPainter : Painter {
             if (heading) {
                 if (section != null) y += 6f
                 labelP.color = if (m.fresh) s.accent(s.w / 2, y) else s.muted(s.w / 2, y)
-                canvas.textTop(if (m.fresh) "NEW" else "EARLIER", p, y, labelP)
+                canvas.textTop(if (m.fresh) (if (boxes) "UNREAD" else "NEW") else (if (boxes) "READ" else "EARLIER"), p, y, labelP)
                 y += 20f
                 section = m.fresh
             }

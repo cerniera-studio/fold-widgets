@@ -69,6 +69,22 @@
             android:taskAffinity=""
             android:theme="@style/Pass" />
 
+        <!-- Microsoft's sign-in page returns here with a one-time code (Outlook.com inbox) -->
+        <activity
+            android:name=".AuthActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Pass">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="foldwidgets" android:host="auth" />
+            </intent-filter>
+        </activity>
+
         <!-- Taps that act in place: play, skip, refresh -->
         <receiver
             android:name=".TapReceiver"

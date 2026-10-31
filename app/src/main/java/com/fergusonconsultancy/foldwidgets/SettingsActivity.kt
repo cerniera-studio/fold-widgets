@@ -83,6 +83,69 @@ class SettingsActivity : Activity() {
             }
         })
 
+        // ---- Inboxes: the widget mirrors Gmail and Outlook themselves, so deleted mail leaves it
+        column.addView(eyebrow("Inboxes"))
+        column.addView(card().apply {
+            addView(label("Connect an inbox and the widget shows what the inbox shows: unread and read, and nothing you have deleted or archived. Read-only: nothing is ever marked read, moved or sent. Kept on this phone only.",
+                13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
+
+            // Gmail: address and app password
+            val gmail = Mailbox.address(this@SettingsActivity, Mailbox.GMAIL)
+            if (gmail != null) {
+                addView(row("Gmail", Mailbox.problem(this@SettingsActivity, Mailbox.GMAIL) ?: gmail, button("Disconnect", primary = false) {
+                    Mailbox.disconnect(this@SettingsActivity, Mailbox.GMAIL); build()
+                }))
+            } else {
+                addView(row("Gmail", "Needs an app password: a 16-letter key Google makes for one app, which you can revoke at any time. Your Google password is never used.",
+                    button("Get one", primary = false) { open("https://myaccount.google.com/apppasswords") }))
+                val addr = field("Gmail address", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
+                val pw = field("App password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                addView(addr, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
+                addView(pw, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
+                addView(button("Connect Gmail") {
+                    val a = addr.text.toString(); val k = pw.text.toString()
+                    toast("Checking with Google…")
+                    Thread {
+                        val failed = Mailbox.connectGmail(applicationContext, a, k)
+                        runOnUiThread { toast(failed ?: "Gmail connected"); if (failed == null) build() }
+                    }.start()
+                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
+            }
+
+            // Outlook.com: Microsoft sign-in, with the app's own registration
+            val outlook = Mailbox.address(this@SettingsActivity, Mailbox.OUTLOOK)
+            if (outlook != null) {
+                addView(row("Outlook", Mailbox.problem(this@SettingsActivity, Mailbox.OUTLOOK) ?: outlook, button("Disconnect", primary = false) {
+                    Mailbox.disconnect(this@SettingsActivity, Mailbox.OUTLOOK); build()
+                }))
+                if (Mailbox.problem(this@SettingsActivity, Mailbox.OUTLOOK) != null) addView(button("Sign in again") { signInMicrosoft() },
+                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
+            } else {
+                addView(row("Outlook", "Signs in on Microsoft's own page. Microsoft requires every app to be registered: paste this app's ID from its registration below.", null))
+                val id = field("Application (client) ID", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS).apply {
+                    setText(Microsoft.clientId(this@SettingsActivity).orEmpty())
+                }
+                addView(id, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
+                addView(button("Sign in with Microsoft") {
+                    val v = id.text.toString().trim()
+                    if (!Regex("[0-9a-fA-F-]{36}").matches(v)) { toast("The ID looks like 1a2b3c4d-… with 36 characters"); return@button }
+                    Microsoft.setClientId(this@SettingsActivity, v)
+                    signInMicrosoft()
+                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
+            }
+
+            if (gmail != null || outlook != null) {
+                val main = Mailbox.mainOnly(this@SettingsActivity)
+                addView(row("Primary and Focused only", if (main) "As the apps notify: Gmail's Primary tab, Outlook's Focused inbox" else "Everything in both inboxes, promotions included",
+                    button(if (main) "Show all" else "Main only", primary = false) {
+                        Mailbox.setMainOnly(this@SettingsActivity, !main); build()
+                    }))
+                addView(row("Look now", "The widget looks every few minutes while the screen is on", button("Refresh", primary = false) {
+                    Thread { Mailbox.sync(applicationContext, force = true); runOnUiThread { toast("Updated"); build() } }.start()
+                }))
+            }
+        })
+
         // ---- Finish
         column.addView(eyebrow("Finish"))
         column.addView(finishGrid(Finish.entries.toList(), { it == Prefs.defaultFinish(this) }) { f ->
@@ -161,6 +224,25 @@ class SettingsActivity : Activity() {
 
         column.addView(eyebrow("How it works"))
         column.addView(label(NOTES, 13.5f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), 0) })
+    }
+
+    private fun field(hintText: String, type: Int) = EditText(this).apply {
+        hint = hintText
+        setHintTextColor(Palette.MUTED); setTextColor(Palette.IVORY); textSize = 15f
+        typeface = Type.sans(context, 400)
+        inputType = type
+        isSingleLine = true
+        background = rounded(Palette.RAISED, px(14).toFloat(), Palette.HAIRLINE, px(1))
+        setPadding(px(14), px(12), px(14), px(12))
+    }
+
+    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+
+    private fun open(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
+
+    private fun signInMicrosoft() {
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Microsoft.signInUri(this))) }
+            .onFailure { toast("No browser could open Microsoft's sign-in page") }
     }
 
     private fun search(name: String, into: LinearLayout) {

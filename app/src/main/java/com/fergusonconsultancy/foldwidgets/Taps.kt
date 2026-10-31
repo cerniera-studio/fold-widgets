@@ -30,6 +30,9 @@ class TapActivity : Activity() {
         val pending = intent.getParcelableExtra<PendingIntent>(Widgets.EXTRA_PENDING)
         @Suppress("DEPRECATION")
         val target = intent.getParcelableExtra<Intent>(Widgets.EXTRA_TARGET)
+        // Opening an email: look at the inboxes again while it is likely being read, deleted or archived
+        val opened = pending?.creatorPackage ?: target?.`package` ?: target?.component?.packageName
+        if (opened != null && opened in Mail.APPS.keys && Mailbox.connected(this)) Mailbox.followUp(applicationContext)
         if (pending != null) {
             // This activity is in front, so it may start the other app's screen on its behalf
             val options = ActivityOptions.makeBasic()
