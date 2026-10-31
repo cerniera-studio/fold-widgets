@@ -37,7 +37,28 @@ class TapActivity : Activity() {
             val ok = runCatching { pending.send(this, 0, null, null, null, null, options.toBundle()) }.isSuccess
             if (ok) return
         }
+        if (target?.getStringExtra(EXTRA_RESOLVE) == RESOLVE_WEATHER) { weather(); return }
         if (target != null) startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /**
+     * Samsung Weather, by whichever way in exists now. If it offers none, or refuses, say so and
+     * show the weather in Google instead: a tap must never do nothing (31 Oct).
+     */
+    private fun weather() {
+        val samsung = Weather.launchIntent(this)
+        if (samsung != null && runCatching { startActivity(samsung.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+        android.widget.Toast.makeText(applicationContext,
+            "Samsung Weather can't be opened by other apps yet. In Samsung Weather's settings, turn on adding it to the Apps screen.",
+            android.widget.Toast.LENGTH_LONG).show()
+        val google = Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, "weather")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(google) }
+    }
+
+    companion object {
+        const val EXTRA_RESOLVE = "fw.resolve"
+        const val RESOLVE_WEATHER = "weather"
     }
 }
 

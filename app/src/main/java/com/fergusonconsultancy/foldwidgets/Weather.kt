@@ -124,12 +124,27 @@ object Weather {
     fun deg(t: Double) = "${Math.round(t)}°"
 
     /** Samsung Weather's package (verified against its APK listings). */
-    private const val SAMSUNG_WEATHER = "com.sec.android.daemonapp"
+    const val SAMSUNG_WEATHER = "com.sec.android.daemonapp"
 
-    /** Opens Samsung Weather; on a phone without it, fetches the forecast again instead. */
-    fun openApp(c: Context): Act {
-        val launch = c.packageManager.getLaunchIntentForPackage(SAMSUNG_WEATHER)
-        return if (launch != null) Act.Open(intent = launch) else Act.Send(TapReceiver.ACTION_WEATHER)
+    /**
+     * A tap opens Samsung Weather. Which way in exists is decided at the moment of the tap, not when
+     * the widget was drawn: Samsung Weather normally has no Apps-screen icon (it is opened from its
+     * own widget), so the usual way in may be missing until it is added there.
+     */
+    fun openApp(c: Context): Act = Act.Open(intent = Intent(c, TapActivity::class.java)
+        .putExtra(TapActivity.EXTRA_RESOLVE, TapActivity.RESOLVE_WEATHER))
+
+    /**
+     * Every way into Samsung Weather Android offers this app, best first: its Apps-screen entry,
+     * then any main screen it exposes. Null if it shows none.
+     */
+    fun launchIntent(c: Context): Intent? {
+        val pm = c.packageManager
+        pm.getLaunchIntentForPackage(SAMSUNG_WEATHER)?.let { return it }
+        val main = Intent(Intent.ACTION_MAIN).setPackage(SAMSUNG_WEATHER)
+        @Suppress("DEPRECATION")
+        val found = pm.queryIntentActivities(main, 0).firstOrNull { it.activityInfo?.exported == true } ?: return null
+        return Intent(Intent.ACTION_MAIN).setClassName(SAMSUNG_WEATHER, found.activityInfo.name)
     }
 }
 
