@@ -47,8 +47,6 @@ class TapReceiver : BroadcastReceiver() {
         Widgets.seatFrom(c.applicationContext, i)
         when (i.action) {
             ACTION_PLAY -> Media.control(c, Media.Control.TOGGLE)
-            ACTION_NEXT -> Media.control(c, Media.Control.NEXT)
-            ACTION_PREVIOUS -> Media.control(c, Media.Control.PREVIOUS)
             ACTION_WEATHER -> {
                 val pending = goAsync()
                 Thread {
@@ -62,8 +60,6 @@ class TapReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_PLAY = "com.fergusonconsultancy.foldwidgets.PLAY"
-        const val ACTION_NEXT = "com.fergusonconsultancy.foldwidgets.NEXT"
-        const val ACTION_PREVIOUS = "com.fergusonconsultancy.foldwidgets.PREVIOUS"
         const val ACTION_WEATHER = "com.fergusonconsultancy.foldwidgets.WEATHER"
     }
 }

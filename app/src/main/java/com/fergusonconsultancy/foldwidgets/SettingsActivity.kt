@@ -224,7 +224,7 @@ class SettingsActivity : Activity() {
             "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Both carry one highlight at the upper left, " +
             "cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat.\n\n" +
             "As a widget gets smaller, things fall away in a fixed order until only the vital thing is left: the play disc, today's date, " +
-            "the temperature, the share of storage used. Skip buttons appear only while something plays.\n\n" +
+            "the temperature, the share of storage used. Music has one control, play and pause; any other tap opens the player.\n\n" +
             "The music widget follows the player Android marks as active. Playing beats paused; among equals, the most recent wins."
     }
 }

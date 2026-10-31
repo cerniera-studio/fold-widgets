@@ -44,7 +44,7 @@ that permission. Nothing else is read.
 - **Left out on purpose:** the colour fringe real glass shows at its rim (it reads as glitter), and a
   second lit corner.
 - **Concentrato by size:** smaller widgets shed things in a fixed order until only the vital thing is
-  left. **Disclosure by need:** skip buttons only while something plays.
+  left. **One control** on the music widget, play and pause; any other tap opens the player.
 
 ## Permissions
 

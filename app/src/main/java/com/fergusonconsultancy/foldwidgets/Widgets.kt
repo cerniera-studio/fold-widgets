@@ -22,7 +22,7 @@ import java.util.concurrent.Executors
 sealed class Act {
     /** Opens something: a pending intent another app gave us (a player's own screen), or an intent. */
     class Open(val pending: PendingIntent? = null, val intent: Intent? = null) : Act()
-    /** Acts in place: play, skip, refresh. */
+    /** Acts in place: play and pause, refresh. */
     class Send(val action: String) : Act()
 }
 

@@ -13,19 +13,19 @@ import android.graphics.Shader
 /**
  * The music widget. Its content belongs to whatever is playing: the player's name and icon, the
  * artwork, the title and artist, and the one colour the artwork lends to the play disc and the
- * progress line. Only the controls the player supports are drawn.
+ * progress line.
  *
  * Concentrato by size: as the widget shrinks, things fall away in a fixed order until only the
  * vital thing is left. Album, then the player's name, then the progress line and the artist, then
  * the title, until only the artwork and the play disc remain.
  * - Poster, the large default: large artwork, the title set in Italiana beside it.
- * - Stack, the small default: artwork and words above, controls below.
+ * - Stack, the small default: artwork and words above, the line and the play disc below.
  * - Compact: artwork, title and play.
  * - Tile: the artwork alone, with play.
  * - Wide, for long thin shapes: artwork the full height on the left, everything else beside it.
  *
- * Disclosure by need: the skip buttons appear only while something plays. Paused or silent, the
- * one thing to do is play.
+ * One control: play and pause (Mechack, 31 Oct). Everything else is done in the player, which any
+ * other tap on the widget opens.
  */
 object MusicPainter : Painter {
 
@@ -47,7 +47,9 @@ object MusicPainter : Painter {
     private fun stack(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
         val k = minOf(s.w / 190f, s.h / 164f).coerceIn(0.72f, 1.6f)
         val p = 14f * k
-        val a = minOf(58f * k, s.h * 0.42f)
+        val r = 20f * k
+        // Without skip buttons the artwork takes the room they left
+        val a = minOf(76f * k, s.h - 2 * p - 2 * r - 12f * k, s.w * 0.42f)
         val art = RectF(p, p, p + a, p + a)
         artwork(cv, art, np, s, 10f * k)
         val x0 = art.right + 12f * k
@@ -60,29 +62,25 @@ object MusicPainter : Painter {
         cv.drawText(fit(titleOf(np), titleP, tw), x0, titleBase, titleP)
         cv.drawText(fit(artistOf(c, np), artistP, tw), x0, artistBase, artistP)
 
-        val r = 20f * k
-        val cy = s.h - p - r
-        val gap = minOf(56f * k, (s.w - 2 * p) / 3.2f)
-        val hits = ArrayList<Hit>()
-        val ly = (art.bottom + cy - r) / 2f
-        val line = if (cy - r - art.bottom > 10f * k) progress(s, np, RectF(p, ly - 1.5f * k, s.w - p, ly + 1.5f * k)) else null
-        Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, s.w, (line?.rect?.top ?: (cy - r)) - 2f * k), it, "Open ${np?.app ?: "player"}")) }
-        hits += controls(cv, s, np, s.w / 2f, cy, gap, r, 15f * k)
-        return Scene(hits, line)
+        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.5f * k, 14f * k)
     }
 
     private fun poster(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
         val k = minOf(s.w / 256f, s.h / 269f).coerceIn(0.8f, 1.7f)
         val p = 18f * k
-        val a = minOf(s.h * 0.5f, (s.w - 2 * p - 14f * k) * 0.55f)
-        val art = RectF(p, p, p + a, p + a)
+        val r = 25f * k
+        val footTop = s.h - p - 2 * r - 16f * k
+        val a = minOf(footTop - p, (s.w - 2 * p - 14f * k) * 0.58f)
+        // The artwork and words sit centred in the room above the foot, not stranded at the top
+        val top = p + ((footTop - p - a) / 2f).coerceAtLeast(0f)
+        val art = RectF(p, top, p + a, top + a)
         artwork(cv, art, np, s, 14f * k)
         val x0 = art.right + 14f * k
         val tw = s.w - x0 - p
-        eyebrow(c, cv, x0, p + 2f * k, tw, 9.5f * k, np, s)
+        eyebrow(c, cv, x0, top + 2f * k, tw, 9.5f * k, np, s)
 
         // The title in Italiana, up to three lines, then the artist beneath
-        var y = p + 2f * k + 9.5f * k * 1.4f + 12f * k
+        var y = top + 2f * k + 9.5f * k * 1.4f + 12f * k
         val titleP = c.ink(24f * k, s.ink(x0 + tw / 2, y + 20f * k), display = true)
         // As many lines as fit beside the artwork, the last one ellipsised, never silently cut
         val titleRoom = ((art.bottom - y - titleP.textSize) / (titleP.textSize * 1.08f)).toInt() + 1
@@ -100,15 +98,7 @@ object MusicPainter : Painter {
             cv.textTop(fit(np.album, albumP, tw), x0, y + 4f * k, albumP)
         }
 
-        val r = 25f * k
-        val cy = s.h - p - r
-        val gap = minOf(74f * k, (s.w - 2 * p) / 3.3f)
-        val ly = (art.bottom + cy - r) / 2f
-        val line = if (cy - r - art.bottom > 12f * k) progress(s, np, RectF(p, ly - 1.6f * k, s.w - p, ly + 1.6f * k)) else null
-        val hits = ArrayList<Hit>()
-        Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, s.w, (line?.rect?.top ?: (cy - r)) - 3f * k), it, "Open ${np?.app ?: "player"}")) }
-        hits += controls(cv, s, np, s.w / 2f, cy, gap, r, 18f * k)
-        return Scene(hits, line)
+        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.6f * k, 18f * k)
     }
 
     private fun wide(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
@@ -127,15 +117,7 @@ object MusicPainter : Painter {
         cv.textTop(fit(artistOf(c, np), artistP, tw), x0, y, artistP); y += artistP.textSize * 1.2f
 
         val r = 18f * k
-        val cy = s.h - p - r
-        val gap = 48f * k
-        val first = x0 + 12f * k
-        val ly = (y + cy - r) / 2f
-        val line = if (cy - r - y > 10f * k) progress(s, np, RectF(x0, ly - 1.4f * k, s.w - p, ly + 1.4f * k)) else null
-        val hits = ArrayList<Hit>()
-        Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, x0 - 4f * k, s.h), it, "Open ${np?.app ?: "player"}")) }
-        hits += controls(cv, s, np, first + gap, cy, gap, r, 14f * k)
-        return Scene(hits, line)
+        return foot(c, cv, s, np, x0, s.w - p, s.h - p - r, r, 1.4f * k, 12f * k)
     }
 
     private fun compact(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
@@ -250,23 +232,21 @@ object MusicPainter : Painter {
         if (np?.playing == true) Glyphs.pause(cv, cx, cy, glyph * 0.9f, mark) else Glyphs.play(cv, cx + glyph * 0.04f, cy, glyph, mark)
     }
 
-    /** Previous, play and next around ([cx], [cy]); only what the player supports. */
-    private fun controls(cv: Canvas, s: Surface, np: NowPlaying?, cx: Float, cy: Float, gap: Float, r: Float, glyph: Float): List<Hit> {
-        val hits = ArrayList<Hit>()
-        val reach = maxOf(r * 1.15f, 22f)
-        fun area(x: Float) = RectF(x - reach, cy - reach, x + reach, cy + reach)
-        val playing = np?.playing == true
-        if (playing && np!!.canPrevious) {
-            Glyphs.skip(cv, cx - gap, cy, glyph, s.ink(cx - gap, cy), forward = false)
-            hits += Hit(area(cx - gap), Act.Send(TapReceiver.ACTION_PREVIOUS), "Previous")
-        }
+    /**
+     * The foot of the widget: the progress line running from [left] to the play disc, which sits at
+     * [right] on the line's centre [cy]. The disc is the only control; every other tap opens the
+     * player, where anything else can be done.
+     */
+    private fun foot(c: Context, cv: Canvas, s: Surface, np: NowPlaying?, left: Float, right: Float, cy: Float, r: Float,
+                     thickness: Float, gap: Float): Scene {
+        val cx = right - r
+        val line = progress(s, np, RectF(left, cy - thickness, cx - r - gap, cy + thickness))
         disc(cv, s, np, cx, cy, r, r * 0.78f)
-        hits += Hit(area(cx), Act.Send(TapReceiver.ACTION_PLAY), if (np?.playing == true) "Pause" else "Play")
-        if (playing && np!!.canNext) {
-            Glyphs.skip(cv, cx + gap, cy, glyph, s.ink(cx + gap, cy), forward = true)
-            hits += Hit(area(cx + gap), Act.Send(TapReceiver.ACTION_NEXT), "Next")
-        }
-        return hits
+        val hits = ArrayList<Hit>()
+        Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, s.w, s.h), it, "Open ${np?.app ?: "player"}")) }
+        val reach = maxOf(r * 1.3f, 24f)
+        hits += Hit(RectF(cx - reach, cy - reach, cx + reach, cy + reach), Act.Send(TapReceiver.ACTION_PLAY), if (np?.playing == true) "Pause" else "Play")
+        return Scene(hits, line)
     }
 
     /** [b] scaled to cover [r], centred. */

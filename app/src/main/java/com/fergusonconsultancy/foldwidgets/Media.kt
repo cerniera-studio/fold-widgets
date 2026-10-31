@@ -42,8 +42,6 @@ class NowPlaying(
         val pos = if (playing && updated > 0) position + ((SystemClock.elapsedRealtime() - updated) * speed).toLong() else position
         return (pos.toFloat() / duration).coerceIn(0f, 1f)
     }
-    val canPrevious get() = actions == 0L || actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L
-    val canNext get() = actions == 0L || actions and PlaybackState.ACTION_SKIP_TO_NEXT != 0L
 }
 
 /**
@@ -52,7 +50,7 @@ class NowPlaying(
  * paused; among equals, the most recently active wins.
  */
 object Media {
-    enum class Control { TOGGLE, NEXT, PREVIOUS }
+    enum class Control { TOGGLE }
 
     private fun component(c: Context) = ComponentName(c, MediaListener::class.java)
 
@@ -141,11 +139,7 @@ object Media {
         val ctl = pick(controllers(c))
         if (ctl == null) {
             // No session: hand the key to whichever app last played, as a headset button would
-            val code = when (what) {
-                Control.TOGGLE -> KeyEvent.KEYCODE_MEDIA_PLAY
-                Control.NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
-                Control.PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
-            }
+            val code = KeyEvent.KEYCODE_MEDIA_PLAY
             val am = c.getSystemService(AudioManager::class.java)
             am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
             am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
@@ -154,8 +148,6 @@ object Media {
         val t = ctl.transportControls
         when (what) {
             Control.TOGGLE -> if (active(ctl.playbackState?.state)) t.pause() else t.play()
-            Control.NEXT -> t.skipToNext()
-            Control.PREVIOUS -> t.skipToPrevious()
         }
     }
 

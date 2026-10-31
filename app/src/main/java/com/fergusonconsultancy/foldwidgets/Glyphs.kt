@@ -34,19 +34,6 @@ object Glyphs {
         c.drawRoundRect(RectF(cx + gap / 2, cy - h / 2, cx + gap / 2 + bw, cy + h / 2), bw * 0.32f, bw * 0.32f, p)
     }
 
-    /** Skip: a triangle into a bar. [forward] points it right. */
-    fun skip(c: Canvas, cx: Float, cy: Float, s: Float, colour: Int, forward: Boolean) {
-        val h = s * 0.78f; val tw = s * 0.62f; val bw = s * 0.15f
-        val dir = if (forward) 1f else -1f
-        val start = cx - dir * (tw + bw) / 2f
-        val tip = start + dir * tw
-        c.drawPath(Path().apply {
-            moveTo(start, cy - h / 2); lineTo(tip, cy); lineTo(start, cy + h / 2); close()
-        }, fill(colour, s * 0.1f))
-        val bx = if (forward) tip else tip - bw
-        c.drawRoundRect(RectF(bx, cy - h / 2, bx + bw, cy + h / 2), bw * 0.4f, bw * 0.4f, fill(colour))
-    }
-
     /** No artwork: a record, the circle as the perfect graphic shape. */
     fun record(c: Canvas, r: RectF, ink: Int) {
         val cx = r.centerX(); val cy = r.centerY(); val rad = minOf(r.width(), r.height()) * 0.34f
