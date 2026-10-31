@@ -65,12 +65,15 @@ class SettingsActivity : Activity() {
         column.addView(eyebrow("Mail"))
         column.addView(card().apply {
             val on = Mail.enabled(this@SettingsActivity)
-            addView(row("Show new mail", "Reads the notifications of the email apps below, and nothing else. Read or dismissed mail leaves the widget. Nothing is stored or sent.",
+            addView(row("Show mail", "Reads the notifications of the email apps below, and nothing else. Each email is remembered for a week on this phone: new mail bright, mail you have opened dimmed. Nothing is sent anywhere.",
                 button(if (on) "Turn off" else "Turn on", primary = !on) {
                     Mail.setEnabled(this@SettingsActivity, !on)
                     if (!on && !Media.allowed(this@SettingsActivity)) startActivity(Media.accessIntent(this@SettingsActivity))
                     build(); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
                 }))
+            if (on) addView(row("Clear the list", "Forget every email the widget has kept", button("Clear", primary = false) {
+                Mail.clear(this@SettingsActivity); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
+            }))
             if (on) Mail.APPS.forEach { (pkg, name) ->
                 if (!Mail.installed(this@SettingsActivity, pkg)) return@forEach
                 val read = pkg in Mail.apps(this@SettingsActivity)

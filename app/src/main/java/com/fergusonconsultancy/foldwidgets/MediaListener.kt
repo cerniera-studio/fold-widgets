@@ -47,6 +47,7 @@ class MediaListener : android.service.notification.NotificationListenerService()
 
     override fun onListenerConnected() {
         instance = this
+        Widgets.later { Mail.remember(this) }
         mailSoon()
         val msm = getSystemService(MediaSessionManager::class.java)
         sessions = msm
@@ -93,7 +94,9 @@ class MediaListener : android.service.notification.NotificationListenerService()
     private fun isMail(sbn: android.service.notification.StatusBarNotification?) =
         sbn != null && Mail.enabled(this) && sbn.packageName in Mail.apps(this)
 
-    override fun onNotificationPosted(sbn: android.service.notification.StatusBarNotification?) { if (isMail(sbn)) mailSoon() }
+    override fun onNotificationPosted(sbn: android.service.notification.StatusBarNotification?) {
+        if (isMail(sbn)) { Widgets.later { Mail.remember(this) }; mailSoon() }
+    }
     override fun onNotificationRemoved(sbn: android.service.notification.StatusBarNotification?) { if (isMail(sbn)) mailSoon() }
 
     companion object {

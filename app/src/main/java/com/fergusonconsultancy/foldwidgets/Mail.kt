@@ -16,17 +16,26 @@ import java.util.Locale
 class MailItem(
     val key: String, val pkg: String, val sender: String, val subject: String, val preview: String,
     val account: String, val time: Long, val open: PendingIntent?,
-)
+    /** Its notification is still up: not yet opened or cleared in the email app. */
+    val fresh: Boolean = true,
+) {
+    val id get() = "${sender.lowercase()}|${subject.lowercase()}"
+}
 
 /**
- * Mail, read from the notifications of the email apps Mechack chooses (31 Oct). Gmail and Outlook
- * do not let other apps read a mailbox, but each new email arrives as a notification carrying its
- * sender, subject, a preview and a link to that exact email. So the widget lists what is waiting:
- * mail you have read or dismissed in the app leaves the widget too. Nothing is stored and nothing
- * leaves the phone; the list is read afresh from the notifications on screen at each redraw.
+ * Mail, from the notifications of the email apps Mechack chooses. Gmail and Outlook do not let
+ * other apps read a mailbox, but each new email arrives as a notification carrying its sender,
+ * subject, a preview and a link to that exact email.
  *
- * Opt-in, and only the apps chosen in settings are read. Outlook combines all its accounts, so the
- * widget does too; when the same email is announced by two apps, it appears once.
+ * Corrected 31 Oct: the first version listed only the notifications on screen, and opening one email
+ * in Outlook clears all of Outlook's mail notifications, so the widget emptied and said "all caught
+ * up" while the inbox was not. Now each email is remembered as it arrives and stays listed, newest
+ * first, for a week or until forty newer ones push it off. Mail whose notification is still up is
+ * new and bright; once opened or cleared in the app it dims but stays. The widget never claims to
+ * know the inbox: it shows what arrived.
+ *
+ * What is kept: sender, subject, the preview line, the account and the time, in this app's private
+ * storage on the phone only, cleared from settings. Nothing is sent anywhere.
  */
 object Mail {
     /** Known email apps, in the order they are offered. */
@@ -35,6 +44,8 @@ object Mail {
         "com.google.android.gm" to "Gmail",
         "com.samsung.android.email.provider" to "Samsung Email",
     )
+    private const val KEEP = 40
+    private const val KEEP_MS = 7 * 86_400_000L
 
     fun enabled(c: Context) = Prefs.of(c).getBoolean("mail_on", false)
     fun setEnabled(c: Context, on: Boolean) = Prefs.of(c).edit().putBoolean("mail_on", on).apply()
@@ -48,18 +59,62 @@ object Mail {
     }
     fun installed(c: Context, pkg: String) = c.packageManager.getLaunchIntentForPackage(pkg) != null
 
-    /** What is waiting, newest first. Empty unless mail is on and notification access is granted. */
-    fun items(c: Context): List<MailItem> {
-        if (!enabled(c)) return emptyList()
+    /** Links into each email, while its app still honours them. Held in memory only. */
+    private val links = java.util.concurrent.ConcurrentHashMap<String, PendingIntent>()
+
+    /** The emails announced right now by the chosen apps. */
+    private fun onScreen(c: Context): List<MailItem> {
         val listener = MediaListener.instance ?: return emptyList()
         val chosen = apps(c)
         val all = runCatching { listener.activeNotifications.toList() }.getOrDefault(emptyList())
-        val items = all.filter { it.packageName in chosen && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
+        return all.filter { it.packageName in chosen && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
             .mapNotNull { read(it) }
-            .sortedByDescending { it.time }
-        // The same email from two apps (Outlook and Gmail both set up for one account) shows once
-        val seen = HashSet<String>()
-        return items.filter { seen.add("${it.sender.lowercase()}|${it.subject.lowercase()}") }
+    }
+
+    /** Remembers every email on screen now. Called whenever a chosen app's notifications change. */
+    @Synchronized fun remember(c: Context) {
+        if (!enabled(c)) return
+        val now = onScreen(c)
+        if (now.isEmpty()) return
+        val kept = load(c).associateBy { it.id }.toMutableMap()
+        for (m in now) {
+            m.open?.let { links[m.id] = it }
+            val old = kept[m.id]
+            kept[m.id] = if (old == null || m.time >= old.time) m else old
+        }
+        save(c, kept.values.toList())
+    }
+
+    /** What arrived, newest first, each marked new if its notification is still up. */
+    fun items(c: Context): List<MailItem> {
+        if (!enabled(c)) return emptyList()
+        remember(c)
+        val fresh = onScreen(c).map { it.id }.toSet()
+        val cutoff = System.currentTimeMillis() - KEEP_MS
+        return load(c).filter { it.time >= cutoff }.sortedByDescending { it.time }.take(KEEP).map {
+            MailItem(it.key, it.pkg, it.sender, it.subject, it.preview, it.account, it.time, links[it.id], it.id in fresh)
+        }
+    }
+
+    fun clear(c: Context) { links.clear(); Prefs.of(c).edit().remove("mail_kept").apply() }
+
+    private fun load(c: Context): List<MailItem> = runCatching {
+        val arr = org.json.JSONArray(Prefs.of(c).getString("mail_kept", "[]"))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            MailItem(o.optString("k"), o.optString("p"), o.optString("s"), o.optString("j"), o.optString("v"),
+                o.optString("a"), o.optLong("t"), null)
+        }
+    }.getOrDefault(emptyList())
+
+    private fun save(c: Context, items: List<MailItem>) {
+        val cutoff = System.currentTimeMillis() - KEEP_MS
+        val arr = org.json.JSONArray()
+        items.filter { it.time >= cutoff }.sortedByDescending { it.time }.take(KEEP).forEach {
+            arr.put(org.json.JSONObject().put("k", it.key).put("p", it.pkg).put("s", it.sender).put("j", it.subject)
+                .put("v", it.preview).put("a", it.account).put("t", it.time))
+        }
+        Prefs.of(c).edit().putString("mail_kept", arr.toString()).apply()
     }
 
     private fun read(sbn: StatusBarNotification): MailItem? {
@@ -114,24 +169,32 @@ object MailPainter : Painter {
 
         val items = Mail.items(c)
         val accounts = items.map { it.account }.filter { it.isNotEmpty() }.distinct()
+        val fresh = items.count { it.fresh }
 
-        // The count, the one large thing
-        val numP = c.ink(if (tall) 42f else if (bare) 26f else 34f, s.ink(p + 20f, p + 18f), display = true)
-        val count = items.size.toString()
-        canvas.textTop(count, p, p, numP)
-        val capNum = capHeight(numP)
-        val tx = p + numP.measureText(count) + 10f
+        // The count of what is new is the one large thing, shown only when there is some: a zero in
+        // Italiana reads as a letter, and the widget cannot know the inbox is empty anyway
+        val tx: Float
+        val capNum: Float
+        if (fresh > 0) {
+            val numP = c.ink(if (tall) 42f else if (bare) 26f else 34f, s.ink(p + 20f, p + 18f), display = true)
+            canvas.textTop(fresh.toString(), p, p, numP)
+            capNum = capHeight(numP)
+            tx = p + numP.measureText(fresh.toString()) + 10f
+        } else {
+            capNum = capHeight(c.ink(if (tall) 42f else if (bare) 26f else 34f, 0, display = true))
+            tx = p
+        }
         val headW = s.w - p - tx
         val inboxP = c.ink(if (bare) 13f else 15f, s.ink(tx + 30f, p + 6f), 600)
         val subP = c.ink(13f, s.muted(tx + 30f, p + capNum), 450)
-        val waiting = if (items.size == 1) "New email" else "New emails"
-        if (bare) canvas.drawText(fit(waiting, inboxP, headW), tx, p + capNum, inboxP)
+        val heading = when { fresh == 1 -> "New email"; fresh > 1 -> "New emails"; else -> "Recent mail" }
+        if (bare) canvas.drawText(fit(heading, inboxP, headW), tx, p + capNum, inboxP)
         else {
-            canvas.textTop(fit(waiting, inboxP, headW), tx, p + 1f, inboxP)
+            canvas.textTop(fit(heading, inboxP, headW), tx, p + 1f, inboxP)
             val sub = when {
                 accounts.size > 1 -> "${accounts.size} accounts"
                 accounts.size == 1 -> accounts[0]
-                else -> Mail.apps(c).mapNotNull { Mail.APPS[it] }.joinToString(" · ")
+                else -> Mail.apps(c).filter { Mail.installed(c, it) }.mapNotNull { Mail.APPS[it] }.joinToString(" · ")
             }
             canvas.drawText(fit(sub, subP, headW), tx, p + capNum, subP)
         }
@@ -139,9 +202,11 @@ object MailPainter : Painter {
 
         if (items.isEmpty()) {
             val emptyP = c.ink(22f, s.ink(s.w / 2, y + 12f), display = true)
-            canvas.textTop("All caught up", p, y + 2f, emptyP)
+            canvas.textTop("No mail yet", p, y + 2f, emptyP)
             val noteP = c.ink(13f, s.muted(s.w / 2, y + 34f), 450)
-            canvas.textTop(fit("New mail appears here as it arrives", noteP, s.w - 2 * p), p, y + 2f + emptyP.textSize * 1.3f, noteP)
+            wrap("Emails appear here as they arrive, and stay for a week", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
+                canvas.textTop(l, p, y + 2f + emptyP.textSize * 1.3f + i * noteP.textSize * 1.3f, noteP)
+            }
             return Scene(hits)
         }
 
@@ -160,7 +225,9 @@ object MailPainter : Painter {
             val reserve = if (i < items.size - 1 && !bare) 18f else 0f
             if (y + thisRow + reserve > s.h - p + 2f) break
             val mid = y + 9f
-            val bar = ACCOUNT[(accounts.indexOf(m.account).coerceAtLeast(0)) % ACCOUNT.size]
+            // New mail bright; mail already opened or cleared in the app dims but stays
+            val accent = ACCOUNT[(accounts.indexOf(m.account).coerceAtLeast(0)) % ACCOUNT.size]
+            val bar = if (m.fresh) accent else (accent and 0x00FFFFFF) or 0x59000000
             canvas.drawRoundRect(RectF(p, y + 1f, p + 3f, y + thisRow - gap - 1f), 1.5f, 1.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bar })
             val time = when (val d = m.time) {
                 in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
@@ -169,17 +236,20 @@ object MailPainter : Painter {
             timeP.color = s.muted(s.w - p, mid)
             val timeW = timeP.measureText(time)
             canvas.drawText(time, s.w - p, mid + capHeight(timeP) / 2, timeP)
-            senderP.color = s.ink(x0 + width / 2, mid)
+            senderP.color = if (m.fresh) s.ink(x0 + width / 2, mid) else s.muted(x0 + width / 2, mid)
+            senderP.typeface = Type.sans(c, if (m.fresh) 600 else 500)
             canvas.drawText(fit(m.sender, senderP, width - timeW - 10f), x0, mid + capHeight(senderP) / 2, senderP)
             if (!bare) {
-                subjectP.color = s.ink(x0 + width / 2, mid + 19f)
+                subjectP.color = if (m.fresh) s.ink(x0 + width / 2, mid + 19f) else s.muted(x0 + width / 2, mid + 19f)
                 canvas.drawText(fit(m.subject, subjectP, width), x0, mid + 19f + capHeight(subjectP) / 2, subjectP)
                 if (tall && m.preview.isNotEmpty()) {
                     previewP.color = s.muted(x0 + width / 2, mid + 37f)
                     canvas.drawText(fit(m.preview, previewP, width), x0, mid + 37f + capHeight(previewP) / 2, previewP)
                 }
             }
-            val open = if (m.open != null) Act.Open(pending = m.open, intent = c.packageManager.getLaunchIntentForPackage(m.pkg)) else inbox
+            // The email itself while its link is live; otherwise its app
+            val app = c.packageManager.getLaunchIntentForPackage(m.pkg)
+            val open = if (m.open != null) Act.Open(pending = m.open, intent = app) else if (app != null) Act.Open(intent = app) else inbox
             if (open != null && hits.size < 12) hits += Hit(RectF(0f, y - 3f, s.w, y + thisRow - gap + 3f), open, "${m.sender}: ${m.subject}")
             y += thisRow
             shown++
