@@ -286,8 +286,10 @@ object Gmail {
         @Suppress("UNCHECKED_CAST")
         val replies = inbox.doCommand(IMAPFolder.ProtocolCommand { p -> p.command("SEARCH X-GM-RAW \"category:primary\"", null) }) as Array<Response>
         if (replies.any { it.isBAD || it.isNO }) return@runCatching null
-        replies.map { it.toString() }.filter { it.startsWith("* SEARCH") }
-            .flatMap { line -> line.removePrefix("* SEARCH").trim().split(' ').mapNotNull { it.trim().toIntOrNull() } }
+        // Without a recognisable SEARCH line, show the whole inbox rather than nothing
+        val lines = replies.map { it.toString().trim().removePrefix("*").trim() }.filter { it.startsWith("SEARCH") }
+        if (lines.isEmpty()) return@runCatching null
+        lines.flatMap { line -> line.removePrefix("SEARCH").trim().split(' ').mapNotNull { it.trim().toIntOrNull() } }
     }.getOrNull()
 
     /** The plain text of a message, or its HTML if it has no plain part. */
