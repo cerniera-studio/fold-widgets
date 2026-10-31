@@ -124,9 +124,15 @@ object Mail {
         val firstLine = text(Notification.EXTRA_TEXT).lineSequence().firstOrNull().orEmpty().trim()
         val big = text(Notification.EXTRA_BIG_TEXT)
         if (sender.isEmpty() && firstLine.isEmpty()) return null
-        // Email apps put the subject first and the opening of the message after it
-        val subject = firstLine.ifEmpty { big.lineSequence().firstOrNull().orEmpty().trim() }
-        val preview = big.removePrefix(subject).trim().replace(Regex("\\s+"), " ")
+        // Gmail gives the subject alone, with the message's opening after a line break in the long
+        // form. Outlook gives "subject · opening" on one line (seen on the phone, 31 Oct), and the
+        // long form runs the two together, so split on its separator first
+        var subject = firstLine.ifEmpty { big.lineSequence().firstOrNull().orEmpty().trim() }
+        var preview = ""
+        val sep = subject.indexOf(" · ")
+        if (sep > 0) { preview = subject.substring(sep + 3).trim(); subject = subject.substring(0, sep).trim() }
+        if (preview.isEmpty()) preview = big.removePrefix(firstLine).trim().removePrefix(subject).trim()
+        preview = preview.replace(Regex("\\s+"), " ")
         return MailItem(sbn.key, sbn.packageName, sender, subject, preview, text(Notification.EXTRA_SUB_TEXT),
             sbn.notification.`when`.takeIf { it > 0 } ?: sbn.postTime, sbn.notification.contentIntent)
     }
@@ -219,11 +225,23 @@ object MailPainter : Painter {
         val x0 = p + 11f
         val width = s.w - p - x0
         var shown = 0
+        // New and earlier mail under their own headings, so which is which is never in doubt
+        val labelP = c.ink(11.5f, s.accent(s.w / 2, y), 600, tracking = 0.14f)
+        var section: Boolean? = null
         for ((i, m) in items.withIndex()) {
             // A row without a preview line is shorter, so no gap is left where it would have been
             val thisRow = if (tall && m.preview.isEmpty()) 44f else rowH
             val reserve = if (i < items.size - 1 && !bare) 18f else 0f
-            if (y + thisRow + reserve > s.h - p + 2f) break
+            val heading = !bare && section != m.fresh
+            val headingH = if (heading) 20f + (if (section != null) 6f else 0f) else 0f
+            if (y + headingH + thisRow + reserve > s.h - p + 2f) break
+            if (heading) {
+                if (section != null) y += 6f
+                labelP.color = if (m.fresh) s.accent(s.w / 2, y) else s.muted(s.w / 2, y)
+                canvas.textTop(if (m.fresh) "NEW" else "EARLIER", p, y, labelP)
+                y += 20f
+                section = m.fresh
+            }
             val mid = y + 9f
             // New mail bright; mail already opened or cleared in the app dims but stays
             val accent = ACCOUNT[(accounts.indexOf(m.account).coerceAtLeast(0)) % ACCOUNT.size]

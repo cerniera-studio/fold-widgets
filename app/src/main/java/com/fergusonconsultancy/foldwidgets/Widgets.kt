@@ -123,6 +123,14 @@ object Widgets {
     fun renderAll(c: Context, kind: Kind? = null) =
         (if (kind == null) Kind.entries else listOf(kind)).forEach { k -> ids(c, k).forEach { render(c, it) } }
 
+    /** The widget's kind and its current size in cells, e.g. "Weather · 4×3", for settings screens. */
+    fun describe(c: Context, id: Int, kind: Kind): String {
+        val r = reportedSize(c, id)
+        // A cover-screen cell is about 64 x 90 dp (from Mechack's screenshots, 31 Oct)
+        val cols = Math.round(r.width / 64f).coerceAtLeast(1); val rows = Math.round(r.height / 90f + 0.25f).coerceAtLeast(1)
+        return kind.name.lowercase().replaceFirstChar { it.uppercase() } + " · about $cols×$rows"
+    }
+
     /** The size the launcher reports for widget [id], in dp, for the screen's orientation. */
     fun reportedSize(c: Context, id: Int): SizeF {
         val o = AppWidgetManager.getInstance(c).getAppWidgetOptions(id)
@@ -156,9 +164,17 @@ object Widgets {
         val d = Backdrop.density(c)
         val seat = Backdrop.seat(c, id)
         val screen = Backdrop.screenSize(c)
-        if (seat != null && seat.exact && seat.screenW == screen.x && seat.screenH == screen.y)
-            return Frame(Math.round(seat.width), Math.round(seat.height), d)
         val r = reportedSize(c, id)
+        if (seat != null && seat.exact && seat.screenW == screen.x && seat.screenH == screen.y && seat.repW > 0f && seat.repH > 0f) {
+            // Measured at this very size: draw to the measured pixels
+            if (Math.abs(seat.repW - r.width) < 1.5f && Math.abs(seat.repH - r.height) < 1.5f)
+                return Frame(Math.round(seat.width), Math.round(seat.height), d)
+            // Resized since (31 Oct): the old measurement no longer applies. Carry over how far the
+            // launcher's report was from the truth, which is the same at every size, until a tap
+            // measures the new size exactly
+            val fx = seat.width / (seat.repW * d); val fy = seat.height / (seat.repH * d)
+            return Frame(Math.round(r.width * d * fx), Math.round(r.height * d * fy), d)
+        }
         return Frame(Math.round(r.width * d), Math.round(r.height * d), d)
     }
 
@@ -193,7 +209,8 @@ object Widgets {
         val r = reportedSize(c, id)
         val seat = Backdrop.seat(c, id)
         Prefs.of(c).edit().putString("diag_$id", "${kind.name.lowercase()}: reported ${r.width.toInt()} x ${r.height.toInt()} dp, " +
-            (if (seat?.exact == true) "measured ${seat.width.toInt()} x ${seat.height.toInt()} px" else "not yet measured (tap it once)") +
+            (if (seat?.exact == true && Math.abs(seat.repW - r.width) < 1.5f && Math.abs(seat.repH - r.height) < 1.5f) "measured ${seat.width.toInt()} x ${seat.height.toInt()} px"
+             else "not yet measured at this size (tap it once)") +
             ", drawn ${bitmap.width} x ${bitmap.height} px at ${"%.3f".format(frame.density)}").apply()
     }
 
@@ -276,7 +293,7 @@ object Widgets {
     fun seatFrom(c: Context, i: Intent) {
         val id = i.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        if (Backdrop.record(c, i, id, hitOf(i), sizeOf(i), i.getBooleanExtra(EXTRA_ROOT, false))) later { render(c, id) }
+        if (Backdrop.record(c, i, id, hitOf(i), sizeOf(i), i.getBooleanExtra(EXTRA_ROOT, false), reportedSize(c, id))) later { render(c, id) }
     }
 
     private val HITS = intArrayOf(R.id.hit0, R.id.hit1, R.id.hit2, R.id.hit3, R.id.hit4, R.id.hit5,

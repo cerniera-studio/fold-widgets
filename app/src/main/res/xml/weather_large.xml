@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Large: 672 x 706 px on the cover screen -->
+<!-- Weather · 4×4: Adds the week ahead and details such as wind, UV and air quality. A cover-screen cell is about 168 x 237 px. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="256dp"
-    android:minHeight="269dp"
+    android:minWidth="255dp"
+    android:minHeight="361dp"
     android:minResizeWidth="72dp"
     android:minResizeHeight="72dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
     android:previewLayout="@layout/preview_weather"
-    android:description="@string/desc_weather"
+    android:description="@string/desc_weather_44"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

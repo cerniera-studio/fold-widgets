@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Every widget is one picture drawn at its exact size, with invisible touch areas laid over
-     the parts that act, and a progress line that can move without redrawing the picture. -->
+     the parts that act, and a progress line that can move without redrawing the picture.
+     fitCenter, never fitXY: if the picture and the space ever disagree, it is scaled evenly,
+     never stretched out of shape (31 Oct). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
@@ -12,7 +14,7 @@
         android:id="@+id/face"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="fitXY"
+        android:scaleType="fitCenter"
         android:importantForAccessibility="no" />
 
     <ProgressBar

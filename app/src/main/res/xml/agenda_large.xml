@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Opens at 4x4 on the cover screen: a cell there is about 168 x 237 px (31 Oct, from Mechack's screenshots) -->
+<!-- Agenda · 4×4: Adds each event's time range and place. A cover-screen cell is about 168 x 237 px. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="255dp"
     android:minHeight="361dp"
@@ -12,6 +12,6 @@
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
     android:previewLayout="@layout/preview_agenda"
-    android:description="@string/desc_agenda"
+    android:description="@string/desc_agenda_44"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

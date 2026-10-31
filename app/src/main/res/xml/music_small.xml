@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Opens at 4x2 on the cover screen: a cell there is about 168 x 237 px (31 Oct, from Mechack's screenshots) -->
+<!-- Music · 4×2: Artwork, title, artist and play. Resizes from 2×1 upwards. A cover-screen cell is about 168 x 237 px. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="255dp"
     android:minHeight="164dp"
@@ -12,6 +12,6 @@
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget"
     android:previewLayout="@layout/preview_music"
-    android:description="@string/desc_music"
+    android:description="@string/desc_music_42"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

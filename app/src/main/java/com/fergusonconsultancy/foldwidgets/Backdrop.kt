@@ -35,14 +35,15 @@ object Backdrop {
      * really gives it, to the pixel, not what it reports.
      */
     data class Seat(val left: Float, val top: Float, val width: Float, val height: Float, val screenW: Int, val screenH: Int,
-                    val exact: Boolean = false) {
+                    val exact: Boolean = false, val repW: Float = 0f, val repH: Float = 0f) {
         /** The cover screen is tall and narrow; the main screen is close to square. */
         val onCover get() = screenH > screenW * 1.6f || screenW > screenH * 1.6f
-        fun encode() = listOf(left, top, width, height, screenW, screenH, if (exact) 1 else 0).joinToString(",")
+        fun encode() = listOf(left, top, width, height, screenW, screenH, if (exact) 1 else 0, repW, repH).joinToString(",")
         companion object {
             fun decode(s: String?): Seat? = runCatching {
                 val p = s!!.split(",")
-                Seat(p[0].toFloat(), p[1].toFloat(), p[2].toFloat(), p[3].toFloat(), p[4].toInt(), p[5].toInt(), p.getOrNull(6) == "1")
+                Seat(p[0].toFloat(), p[1].toFloat(), p[2].toFloat(), p[3].toFloat(), p[4].toInt(), p[5].toInt(), p.getOrNull(6) == "1",
+                    p.getOrNull(7)?.toFloat() ?: 0f, p.getOrNull(8)?.toFloat() ?: 0f)
             }.getOrNull()
         }
     }
@@ -56,12 +57,12 @@ object Backdrop {
      * which places the widget but cannot measure it. Returns true if the seat changed, so the
      * caller redraws the widget at its true size and against its new ground.
      */
-    fun record(c: Context, intent: Intent, id: Int, hit: RectF?, sizeDp: android.util.SizeF?, root: Boolean): Boolean {
+    fun record(c: Context, intent: Intent, id: Int, hit: RectF?, sizeDp: android.util.SizeF?, root: Boolean, reported: android.util.SizeF): Boolean {
         val b = intent.sourceBounds ?: return false
         if (b.width() <= 0) return false
         val screen = screenSize(c)
         val old = seat(c, id)
-        val seat = if (root) Seat(b.left.toFloat(), b.top.toFloat(), b.width().toFloat(), b.height().toFloat(), screen.x, screen.y, true) else {
+        val seat = if (root) Seat(b.left.toFloat(), b.top.toFloat(), b.width().toFloat(), b.height().toFloat(), screen.x, screen.y, true, reported.width, reported.height) else {
             if (hit == null || sizeDp == null || hit.width() <= 0f) return false
             val d = density(c)
             val left = b.left - hit.left * d; val top = b.top - hit.top * d

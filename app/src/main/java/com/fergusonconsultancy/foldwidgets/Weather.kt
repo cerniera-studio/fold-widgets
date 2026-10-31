@@ -16,9 +16,22 @@ import java.net.URLEncoder
 /** A place for the weather. */
 class Place(val name: String, val lat: Double, val lon: Double, val detail: String = "")
 
-/** The weather now and the hours ahead, as last fetched. */
-class Forecast(val temp: Double, val code: Int, val day: Boolean, val high: Double, val low: Double, val hours: List<Hour>, val fetched: Long)
-class Hour(val label: String, val temp: Double, val code: Int, val day: Boolean)
+/**
+ * The weather as last fetched. Everything beyond the temperature, the sky and today's range is
+ * optional: Open-Meteo may not give it, and the widget shows only what it has.
+ */
+class Forecast(
+    val temp: Double, val code: Int, val day: Boolean, val high: Double, val low: Double,
+    val hours: List<Hour>, val fetched: Long,
+    val days: List<Day> = emptyList(),
+    val feels: Double? = null, val humidity: Int? = null, val wind: Double? = null, val windDir: Int? = null,
+    val pressure: Double? = null, val uv: Double? = null, val visibility: Double? = null, val dew: Double? = null,
+    val sunrise: String? = null, val sunset: String? = null, val nextSunrise: String? = null,
+    val aqi: Int? = null, val pollen: Pair<String, Double>? = null,
+)
+/** [hour] is the hour of day in the place's own time, 0 to 23. */
+class Hour(val label: String, val temp: Double, val code: Int, val day: Boolean, val hour: Int = 0, val rain: Int? = null)
+class Day(val date: String, val code: Int, val max: Double, val min: Double, val rain: Int? = null)
 
 /**
  * Weather from Open-Meteo: free, no account, no key. The place is chosen in settings, by name or
@@ -39,15 +52,29 @@ object Weather {
 
     fun forecast(c: Context): Forecast? = runCatching { parse(JSONObject(Prefs.of(c).getString("forecast", null)!!)) }.getOrNull()
 
-    /** Fetches and keeps the forecast. Network work: never on the main thread. */
+    /**
+     * Fetches and keeps the forecast. Network work: never on the main thread. Asks for everything
+     * the widget can show; if Open-Meteo refuses any of it, falls back to the forecast that has
+     * always worked, so the weather is never lost for want of a detail.
+     */
     fun refresh(c: Context) {
         val place = place(c) ?: return
-        val url = "https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}" +
-            "&current=temperature_2m,weather_code,is_day" +
-            "&hourly=temperature_2m,weather_code,is_day" +
-            "&daily=temperature_2m_max,temperature_2m_min" +
-            "&timezone=auto&forecast_days=2"
-        val json = JSONObject(get(url))
+        val base = "https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&timezone=auto"
+        val full = base +
+            "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m," +
+            "wind_direction_10m,pressure_msl,uv_index,dew_point_2m,visibility" +
+            "&hourly=temperature_2m,weather_code,is_day,precipitation_probability" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max" +
+            "&forecast_days=8&wind_speed_unit=mph"
+        val minimal = base + "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day" +
+            "&daily=temperature_2m_max,temperature_2m_min&forecast_days=2"
+        val json = runCatching { JSONObject(get(full)).also { parse(it) } }.getOrNull() ?: JSONObject(get(minimal))
+        // Air quality and pollen come from a separate service; without them the rest still shows
+        runCatching {
+            val aq = JSONObject(get("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${place.lat}&longitude=${place.lon}" +
+                "&current=european_aqi,grass_pollen,birch_pollen,alder_pollen&timezone=auto"))
+            json.put("aq", aq.getJSONObject("current"))
+        }
         json.put("fetched", System.currentTimeMillis())
         parse(json)  // only keep what reads back cleanly
         Prefs.of(c).edit().putString("forecast", json.toString()).apply()
@@ -92,14 +119,39 @@ object Weather {
         val nowIso = cur.getString("time").take(13)  // yyyy-MM-ddTHH, in the place's own time
         var start = (0 until times.length()).firstOrNull { times.getString(it).take(13) >= nowIso } ?: 0
         start += 1
-        val hours = (start until minOf(start + 6, times.length())).map { i ->
+        val rainH = hourly.optJSONArray("precipitation_probability")
+        val hours = (start until minOf(start + 10, times.length())).map { i ->
+            val hr = times.getString(i).substring(11, 13).toInt()
             Hour(times.getString(i).substring(11, 13), hourly.getJSONArray("temperature_2m").getDouble(i),
-                hourly.getJSONArray("weather_code").getInt(i), hourly.getJSONArray("is_day").getInt(i) == 1)
+                hourly.getJSONArray("weather_code").getInt(i), hourly.getJSONArray("is_day").getInt(i) == 1, hr,
+                rainH?.let { if (it.isNull(i)) null else it.optInt(i) })
+        }
+        fun num(o: JSONObject, k: String) = if (o.has(k) && !o.isNull(k)) o.getDouble(k) else null
+        val dTimes = daily.optJSONArray("time")
+        val dCode = daily.optJSONArray("weather_code")
+        val dRain = daily.optJSONArray("precipitation_probability_max")
+        val days = if (dTimes == null || dCode == null) emptyList() else (0 until dTimes.length()).map { i ->
+            Day(dTimes.getString(i), dCode.optInt(i), daily.getJSONArray("temperature_2m_max").getDouble(i),
+                daily.getJSONArray("temperature_2m_min").getDouble(i), dRain?.let { if (it.isNull(i)) null else it.optInt(i) })
+        }
+        val rise = daily.optJSONArray("sunrise"); val set = daily.optJSONArray("sunset")
+        val aq = j.optJSONObject("aq")
+        val pollen = aq?.let { a ->
+            listOf("grass_pollen" to "grass", "birch_pollen" to "birch", "alder_pollen" to "alder")
+                .mapNotNull { (k, name) -> num(a, k)?.let { name to it } }.maxByOrNull { it.second }
         }
         return Forecast(
             cur.getDouble("temperature_2m"), cur.getInt("weather_code"), cur.getInt("is_day") == 1,
             daily.getJSONArray("temperature_2m_max").getDouble(0), daily.getJSONArray("temperature_2m_min").getDouble(0),
-            hours, j.optLong("fetched", 0L))
+            hours, j.optLong("fetched", 0L), days,
+            feels = num(cur, "apparent_temperature"), humidity = num(cur, "relative_humidity_2m")?.toInt(),
+            wind = num(cur, "wind_speed_10m"), windDir = num(cur, "wind_direction_10m")?.toInt(),
+            pressure = num(cur, "pressure_msl"), uv = num(cur, "uv_index"), visibility = num(cur, "visibility"),
+            dew = num(cur, "dew_point_2m"),
+            sunrise = rise?.optString(0)?.takeIf { it.length >= 16 }, sunset = set?.optString(0)?.takeIf { it.length >= 16 },
+            nextSunrise = rise?.optString(1)?.takeIf { it.length >= 16 },
+            aqi = aq?.let { num(it, "european_aqi")?.toInt() }, pollen = pollen,
+        )
     }
 
     /** The WMO weather code as words and a sky to draw. */
@@ -149,79 +201,351 @@ object Weather {
 }
 
 /**
- * The weather. The temperature in Italiana is the one large thing; the sky is drawn top right; the
- * place, the conditions and the day's range sit quietly beside them. On the large widget the
- * coming hours run along the foot.
+ * What a weather widget may show beyond its minimum, chosen per widget in its settings (31 Oct).
+ * Every widget shows the place, the temperature and the conditions; these come in as space allows.
+ */
+object WeatherOptions {
+    enum class Item(val label: String, val note: String) {
+        HOURLY("Next hours", "Temperature, sky and chance of rain hour by hour"),
+        WEEK("Week ahead", "Each day's sky, chance of rain and range"),
+        RANGE("Today's high and low", "Beneath the temperature"),
+        FEELS("Feels like", "The temperature as it feels"),
+        HUMIDITY("Humidity", "Relative humidity"),
+        WIND("Wind", "Direction and speed in mph"),
+        UV("UV index", "With its level"),
+        SUN("Sunrise and sunset", "Whichever comes next"),
+        AIR("Air quality", "European index, with its level"),
+        POLLEN("Pollen", "The highest of grass, birch and alder"),
+        PRESSURE("Pressure", "At sea level, in millibars"),
+        VISIBILITY("Visibility", "In kilometres"),
+        DEW("Dew point", "Where the air would turn to dew"),
+    }
+
+    /** The details, the tiles at the foot of a large widget, in the order they are offered. */
+    val DETAILS = listOf(Item.FEELS, Item.HUMIDITY, Item.WIND, Item.UV, Item.SUN, Item.AIR, Item.POLLEN, Item.PRESSURE, Item.VISIBILITY, Item.DEW)
+
+    fun on(c: Context, id: Int, item: Item): Boolean = Prefs.of(c).getBoolean("wx_${id}_${item.name}", true)
+    fun set(c: Context, id: Int, item: Item, on: Boolean) = Prefs.of(c).edit().putBoolean("wx_${id}_${item.name}", on).apply()
+}
+
+/**
+ * The weather. The minimum, at every size: the place, the temperature in Italiana, the conditions
+ * and the sky drawn as Bauhaus geometry. Beyond that the widget fills with what it has room for,
+ * in this order: today's range and how it feels, the next hours, the week ahead, then details as
+ * tiles. A short wide widget lays the minimum out in a row and runs the hours along it; a tall
+ * narrow one stacks the week beneath. Which of these appear is chosen per widget.
  */
 object WeatherPainter : Painter {
 
     override fun paint(c: Context, id: Int, canvas: Canvas, s: Surface): Scene {
-        val large = s.w >= 220f && s.h >= 220f
-        val k = if (large) minOf(s.w / 256f, s.h / 269f).coerceIn(0.8f, 1.6f) else minOf(s.w / 190f, s.h / 164f).coerceIn(0.62f, 1.4f)
-        val p = (if (large) 18f else 14f) * k
         val place = Weather.place(c)
         val fc = Weather.forecast(c)
         val all = RectF(0f, 0f, s.w, s.h)
+        val p = if (minOf(s.w, s.h) >= 220f) 18f else if (minOf(s.w, s.h) >= 120f) 14f else 10f
 
         if (place == null || fc == null) {
-            val titleP = c.ink(22f * k, s.ink(s.w / 2, s.h / 2), display = true)
+            val titleP = c.ink(22f, s.ink(s.w / 2, s.h / 2), display = true)
             canvas.textTop("Weather", p, p, titleP)
-            val noteP = c.ink(11.5f * k, s.muted(s.w / 2, s.h / 2))
+            val noteP = c.ink(12.5f, s.muted(s.w / 2, s.h / 2), 450)
             val note = if (place == null) "Tap to choose a place" else "Fetching ${place.name}…"
-            wrap(note, noteP, s.w - 2 * p, 2).forEachIndexed { i, l -> canvas.textTop(l, p, p + titleP.textSize * 1.4f + i * noteP.textSize * 1.3f, noteP) }
+            wrap(note, noteP, s.w - 2 * p, 2).forEachIndexed { i, l -> canvas.textTop(l, p, p + capHeight(titleP) + 12f + i * noteP.textSize * 1.3f, noteP) }
             val act = if (place == null) Act.Open(intent = Intent(c, SettingsActivity::class.java)) else Weather.openApp(c)
             return Scene(listOf(Hit(all, act, "Weather")))
         }
+        fun on(i: WeatherOptions.Item) = WeatherOptions.on(c, id, i)
 
+        if (s.h < 190f && s.w >= s.h * 1.6f) strip(c, canvas, s, fc, place, p, ::on) else column(c, canvas, s, fc, place, p, ::on)
+        return Scene(listOf(Hit(all, Weather.openApp(c), "Open Weather")))
+    }
+
+    // ---- A short, wide widget: the minimum in a row, then the hours ----------------------------
+
+    private fun strip(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, on: (WeatherOptions.Item) -> Boolean) {
         val (words, sky) = Weather.describe(fc.code)
-        // The sky, top right
-        val skyS = (if (large) 68f else 50f) * k
-        val skyX = s.w - p - skyS / 2; val skyY = p + skyS / 2 - 2f * k
-        Glyphs.sky(canvas, sky, fc.day, skyX, skyY, skyS, s.ink(skyX, skyY), s.accent(skyX, skyY))
-
-        // Concentrato: when small, only the sky and the temperature stay
-        val bare = minOf(s.w, s.h) < 120f
-        // The place and the conditions, top left
-        val textW = s.w - 2 * p - skyS - 8f * k
-        val placeP = c.ink(13f * k, s.ink(p + textW / 2, p + 6f * k), 500)
-        if (!bare) {
-            canvas.textTop(fit(place.name, placeP, textW), p, p, placeP)
-            val wordsP = c.ink(11.5f * k, s.muted(p + textW / 2, p + 24f * k))
-            canvas.textTop(fit(words, wordsP, textW), p, p + placeP.textSize * 1.45f, wordsP)
+        val tempP = c.ink(minOf(s.h * 0.52f, 64f), s.ink(p + 30f, s.h / 2), display = true)
+        val temp = Weather.deg(fc.temp)
+        val capT = capHeight(tempP)
+        val base = (s.h + capT) / 2f
+        cv.drawText(temp, p - 1f, base, tempP)
+        var x = p + tempP.measureText(temp) + 14f
+        // Place, conditions and the range, stacked beside the temperature
+        val placeP = c.ink(14.5f, s.ink(x + 40f, s.h / 2 - 12f), 600)
+        val wordsP = c.ink(12.5f, s.muted(x + 40f, s.h / 2 + 6f), 450)
+        val rangeP = c.ink(11.5f, s.muted(x + 40f, s.h / 2 + 20f), 500)
+        val showRange = on(WeatherOptions.Item.RANGE) && s.h >= 100f
+        val lines = if (showRange) 3 else 2
+        val rangeText = "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}"
+        // The block is as wide as its words, so the hours get the rest
+        val blockW = minOf(maxOf(placeP.measureText(place.name), wordsP.measureText(words), if (showRange) rangeP.measureText(rangeText) else 0f),
+            150f, s.w - x - p)
+        var y = s.h / 2f - (lines * 17f) / 2f
+        cv.textTop(fit(place.name, placeP, blockW), x, y, placeP); y += 18f
+        cv.textTop(fit(words, wordsP, blockW), x, y, wordsP); y += 17f
+        if (showRange) cv.textTop(fit(rangeText, rangeP, blockW), x, y, rangeP)
+        x += blockW + 12f
+        val g = minOf(s.h * 0.42f, 46f)
+        // The sky gives way to the hours when there is room for one but not both
+        val rest = s.w - p - x
+        val hoursWanted = on(WeatherOptions.Item.HOURLY) || on(WeatherOptions.Item.WEEK)
+        if (rest >= g && !(hoursWanted && rest >= 2 * 46f && rest - g - 18f < 2 * 46f)) {
+            Glyphs.sky(cv, sky, fc.day, x + g / 2, s.h / 2, g, s.ink(x + g / 2, s.h / 2), s.accent(x + g / 2, s.h / 2))
+            x += g + 18f
         }
+        // The hours, as many as fit; else the week
+        val room = s.w - p - x
+        if (room >= 2 * 46f) {
+            cv.drawLine(x - 9f, p + 4f, x - 9f, s.h - p - 4f, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline; color = s.faint(x, s.h / 2) })
+            if (on(WeatherOptions.Item.HOURLY)) hours(c, cv, s, fc, x, p, s.w - p, s.h - p) else if (on(WeatherOptions.Item.WEEK)) weekColumns(c, cv, s, fc, x, p, s.w - p, s.h - p)
+        }
+    }
 
-        // The temperature, the one large thing
-        val stripH = if (large && s.h >= 230f) 56f * k else 0f
-        val tempP = c.ink((if (large) 84f else 58f) * k, s.ink(p + 40f * k, s.h - p - stripH - 30f * k), display = true)
-        val rangeP = c.ink(11.5f * k, s.muted(p + 60f * k, s.h - p - stripH), 500)
-        val rangeBase = s.h - p - stripH - (if (stripH > 0) 14f * k else 0f)
-        val tempBase = if (bare) s.h - p else rangeBase - rangeP.textSize * 1.7f
-        canvas.drawText(Weather.deg(fc.temp), p - 2f * k, tempBase, tempP)
-        val stale = (System.currentTimeMillis() - fc.fetched) > 3 * 3_600_000L
-        val range = "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}" +
-            if (stale) "   ·   ${(System.currentTimeMillis() - fc.fetched) / 3_600_000L}h ago" else ""
-        if (!bare) canvas.drawText(fit(range, rangeP, s.w - 2 * p), p, rangeBase, rangeP)
+    // ---- Everything else: the minimum at the top, then modules down the widget ------------------
 
-        // The hours ahead
-        if (stripH > 0 && fc.hours.isNotEmpty()) {
-            val n = minOf(fc.hours.size, if (s.w >= 300f) 6 else 5)
-            val colW = (s.w - 2 * p) / n
-            val top = s.h - p - stripH
-            canvas.drawLine(p, top - 6f * k, s.w - p, top - 6f * k, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                strokeWidth = s.hairline; color = s.faint(s.w / 2, top)
-            })
-            for (i in 0 until n) {
-                val hr = fc.hours[i]
-                val cx = p + colW * (i + 0.5f)
-                val labelP = c.ink(10f * k, s.muted(cx, top + 8f * k), 500).apply { textAlign = Paint.Align.CENTER }
-                canvas.textTop(hr.label, cx, top + 4f * k, labelP)
-                val gy = top + 28f * k
-                Glyphs.sky(canvas, Weather.describe(hr.code).second, hr.day, cx, gy, 20f * k, s.ink(cx, gy), s.accent(cx, gy))
-                val tP = c.ink(12f * k, s.ink(cx, top + 48f * k), 500).apply { textAlign = Paint.Align.CENTER }
-                canvas.drawText(Weather.deg(hr.temp), cx + 2f * k, top + stripH, tP)
+    private fun column(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, on: (WeatherOptions.Item) -> Boolean) {
+        // Wide and tall enough: the minimum in a left column, the modules beside it (31 Oct)
+        val split = s.w >= 360f && s.h >= 200f && s.w >= s.h * 1.4f
+        val headRight = if (split) s.w * 0.42f else s.w - p
+        val headBottom = header(c, cv, s, fc, place, p, p, headRight, null, on)
+        if (headBottom < 0f) return
+        if (split) {
+            val x = headRight + 10f
+            val rule = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline; color = s.faint(x, s.h / 2) }
+            cv.drawLine(x, p + 4f, x, s.h - p - 4f, rule)
+            // The hours and the week beside the minimum; the details beneath it
+            modules(c, cv, s, fc, x + 14f, s.w - p, p, s.h - p, on, divideFirst = false, allowed = setOf(Module.HOURS, Module.WEEK))
+            modules(c, cv, s, fc, p, headRight, headBottom + 6f, s.h - p, on, divideFirst = true, allowed = setOf(Module.DETAILS))
+        } else modules(c, cv, s, fc, p, s.w - p, headBottom + 6f, s.h - p, on, divideFirst = true)
+    }
+
+    /**
+     * The minimum: place and conditions top left, the sky top right, the temperature beneath with
+     * today's range and how it feels. Returns where it ends, or -1 when the widget is too small for
+     * anything more. With [fillTo], the temperature sits at the foot of a column that tall.
+     */
+    private fun header(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, left: Float, right: Float,
+                       fillTo: Float?, on: (WeatherOptions.Item) -> Boolean): Float {
+        val (words, sky) = Weather.describe(fc.code)
+        val w = right - left
+        val tiny = minOf(s.w, s.h) < 120f
+        val g = (minOf(w, s.h) * 0.24f).coerceIn(26f, 64f)
+        val gx = right - g / 2; val gy = p + g / 2 - 2f
+        Glyphs.sky(cv, sky, fc.day, gx, gy, g, s.ink(gx, gy), s.accent(gx, gy))
+        val textW = w - g - 6f
+        val placeP = c.ink(if (tiny) 12.5f else 15f, s.ink(left + textW / 2, p + 6f), 600)
+        val wordsP = c.ink(if (tiny) 11.5f else 13f, s.muted(left + textW / 2, p + 24f), 450)
+        cv.textTop(fit(place.name, placeP, textW), left, p, placeP)
+        cv.textTop(fit(words, wordsP, textW), left, p + placeP.textSize * 1.4f, wordsP)
+        val topBlock = p + maxOf(placeP.textSize * 1.4f + wordsP.textSize * 1.2f, g)
+
+        val tempSize = if (tiny) minOf(s.h * 0.34f, w * 0.3f).coerceAtLeast(24f) else minOf(w * 0.30f, s.h * 0.2f, 84f).coerceAtLeast(44f)
+        val tempP = c.ink(tempSize, s.ink(left + 40f, topBlock + tempSize / 2), display = true)
+        val capT = capHeight(tempP)
+        val showRange = on(WeatherOptions.Item.RANGE) && !tiny
+        val showFeels = on(WeatherOptions.Item.FEELS) && fc.feels != null && !tiny && w >= 200f
+        val lineH = if (showRange || showFeels) 22f else 0f
+        // In a column of its own the temperature sits at the foot; otherwise just under the place
+        var base = if (fillTo != null) fillTo - lineH - 4f else topBlock + 14f + capT
+        cv.drawText(Weather.deg(fc.temp), left - 2f, base, tempP)
+        if (lineH > 0f) {
+            val parts = ArrayList<String>()
+            if (showRange) parts += "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}"
+            if (showFeels) parts += "Feels like ${Weather.deg(fc.feels!!)}"
+            val lineP = c.ink(12.5f, s.muted(left + 60f, base + 14f), 500)
+            cv.drawText(fit(parts.joinToString("   ·   "), lineP, w), left, base + 10f + capHeight(lineP) + 4f, lineP)
+        }
+        return if (tiny) -1f else topBlock + 14f + capT + 10f + lineH
+    }
+
+    private enum class Module { HOURS, WEEK, DETAILS }
+
+    /**
+     * The modules between [top] and [bottom], in the order that suits the width: hours first where
+     * there is room for at least three of them, the week first in a narrow widget. Each is sized
+     * first, then any room left over is shared out between them, so nothing is crowded at the top
+     * with a gap at the foot.
+     */
+    private fun modules(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, right: Float, top0: Float, bottom: Float,
+                        on: (WeatherOptions.Item) -> Boolean, divideFirst: Boolean, allowed: Set<Module> = Module.entries.toSet()) {
+        val w = right - left
+        val tiles = WeatherOptions.DETAILS.filter { on(it) }.mapNotNull { item -> value(c, fc, item)?.let { item to it } }
+        val cols = when { w >= 330f -> 3; w >= 180f -> 2; else -> 1 }
+        val order = if (w < 3 * 46f) listOf(Module.WEEK, Module.DETAILS, Module.HOURS) else listOf(Module.HOURS, Module.WEEK, Module.DETAILS)
+        val plan = ArrayList<Pair<Module, Int>>()   // module and its rows (hours: 1)
+        var room = bottom - top0
+        val dividerH = 14f
+        for (m in order.filter { it in allowed }) {
+            when (m) {
+                Module.HOURS -> if (on(WeatherOptions.Item.HOURLY) && fc.hours.isNotEmpty() && w >= 3 * 46f && room >= 58f + dividerH) {
+                    plan += m to 1; room -= 58f + dividerH
+                }
+                Module.WEEK -> if (on(WeatherOptions.Item.WEEK) && fc.days.size > 1) {
+                    // Leave a row of details if they are wanted and there is plenty of room
+                    val reserve = if (tiles.isNotEmpty() && room > 7 * 26f + dividerH + 60f) 46f + dividerH else 0f
+                    val rows = minOf(fc.days.size - 1, 7, ((room - dividerH - reserve) / 26f).toInt())
+                    if (rows >= 3) { plan += m to rows; room -= rows * 26f + dividerH }
+                }
+                Module.DETAILS -> if (tiles.isNotEmpty()) {
+                    val rows = minOf(((room - dividerH + 6f) / 46f).toInt(), (tiles.size + cols - 1) / cols)
+                    if (rows >= 1) { plan += m to rows; room -= rows * 46f - 6f + dividerH }
+                }
             }
         }
-        // A tap opens Samsung Weather (31 Oct); the forecast here refreshes on its own
-        return Scene(listOf(Hit(all, Weather.openApp(c), "Open Weather")))
+        if (plan.isEmpty()) return
+        val extra = (room / plan.size).coerceIn(0f, 22f)
+        val rule = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline }
+        var y = top0
+        for ((i, step) in plan.withIndex()) {
+            val (m, rows) = step
+            y += extra / 2f
+            if (i > 0 || divideFirst) { rule.color = s.faint((left + right) / 2, y); cv.drawLine(left, y, right, y, rule) }
+            y += 10f
+            when (m) {
+                Module.HOURS -> { hours(c, cv, s, fc, left, y, right, y + 58f); y += 58f }
+                Module.WEEK -> { week(c, cv, s, fc, left, y, right, rows); y += rows * 26f }
+                Module.DETAILS -> {
+                    val colW = w / cols
+                    val labelP = c.ink(10f, s.muted(left + w / 2, y), 500, tracking = 0.12f)
+                    val valueP = c.ink(15f, s.ink(left + w / 2, y), 600)
+                    for ((k, t) in tiles.take(rows * cols).withIndex()) {
+                        val x = left + colW * (k % cols); val ty = y + 46f * (k / cols)
+                        labelP.color = s.muted(x + colW / 2, ty); valueP.color = s.ink(x + colW / 2, ty + 20f)
+                        cv.textTop(fit(t.second.first.uppercase(), labelP, colW - 8f), x, ty, labelP)
+                        cv.textTop(fit(t.second.second, valueP, colW - 8f), x, ty + 16f, valueP)
+                    }
+                    y += rows * 46f - 6f
+                }
+            }
+            y += 4f + extra / 2f
+        }
+    }
+
+    // ---- Modules -------------------------------------------------------------------------------
+
+    /** The next hours as columns between [left] and [right]: time, sky, temperature, chance of rain. */
+    private fun hours(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, top: Float, right: Float, bottom: Float) {
+        val n = ((right - left) / 46f).toInt().coerceIn(1, minOf(8, fc.hours.size))
+        val colW = (right - left) / n
+        val h = bottom - top
+        val twelve = !android.text.format.DateFormat.is24HourFormat(c)
+        for (i in 0 until n) {
+            val hr = fc.hours[i]
+            val cx = left + colW * (i + 0.5f)
+            val label = if (twelve) "${if (hr.hour % 12 == 0) 12 else hr.hour % 12}${if (hr.hour < 12) "am" else "pm"}" else hr.label
+            val labelP = c.ink(11f, s.muted(cx, top + 6f), 500).apply { textAlign = Paint.Align.CENTER }
+            cv.textTop(label, cx, top, labelP)
+            val gy = top + h * 0.45f
+            Glyphs.sky(cv, Weather.describe(hr.code).second, hr.day, cx, gy, minOf(20f, h * 0.34f), s.ink(cx, gy), s.accent(cx, gy))
+            val tP = c.ink(13f, s.ink(cx, top + h * 0.8f), 600).apply { textAlign = Paint.Align.CENTER }
+            val rain = hr.rain?.takeIf { it >= 10 }
+            val tBase = if (rain != null && h >= 64f) top + h * 0.82f else top + h
+            cv.drawText(Weather.deg(hr.temp), cx + 2f, tBase, tP)
+            if (rain != null && h >= 64f) {
+                val rP = c.ink(10.5f, s.accent(cx, top + h), 500).apply { textAlign = Paint.Align.CENTER }
+                cv.drawText("$rain%", cx, top + h, rP)
+            }
+        }
+    }
+
+    /** The week as rows: day, sky, chance of rain, the low, the day's range against the week's, the high. */
+    private fun week(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, top: Float, right: Float, rows: Int) {
+        val days = fc.days.drop(1).take(rows)
+        if (days.isEmpty()) return
+        val weekMin = days.minOf { it.min }; val weekMax = days.maxOf { it.max }
+        val w = right - left
+        val dayP = c.ink(13.5f, s.ink(left + 20f, top), 500)
+        val lowP = c.ink(13f, s.muted(right - 60f, top), 500).apply { textAlign = Paint.Align.RIGHT }
+        val highP = c.ink(13f, s.ink(right - 10f, top), 600).apply { textAlign = Paint.Align.RIGHT }
+        val rainP = c.ink(11f, s.accent(left + 80f, top), 500)
+        val withRain = w >= 220f
+        val withBar = w >= 270f
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val dayName = java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault())
+        for ((i, d) in days.withIndex()) {
+            val mid = top + 26f * i + 11f
+            val name = runCatching { dayName.format(fmt.parse(d.date)!!) }.getOrDefault(d.date.takeLast(2))
+            dayP.color = s.ink(left + 20f, mid)
+            cv.drawText(name, left, mid + capHeight(dayP) / 2, dayP)
+            val gx = left + 52f
+            Glyphs.sky(cv, Weather.describe(d.code).second, true, gx, mid, 18f, s.ink(gx, mid), s.accent(gx, mid))
+            if (withRain) d.rain?.takeIf { it >= 10 }?.let { cv.drawText("$it%", gx + 18f, mid + capHeight(rainP) / 2, rainP) }
+            highP.color = s.ink(right - 10f, mid); lowP.color = s.muted(right - 60f, mid)
+            cv.drawText(Weather.deg(d.max), right, mid + capHeight(highP) / 2, highP)
+            if (withBar) {
+                // The day's range as a short line on the week's scale: information, not ornament
+                val barL = left + w * 0.52f; val barR = right - 40f
+                val span = (weekMax - weekMin).coerceAtLeast(1.0)
+                val a = barL + ((d.min - weekMin) / span * (barR - barL)).toFloat()
+                val b = barL + ((d.max - weekMin) / span * (barR - barL)).toFloat()
+                cv.drawText(Weather.deg(d.min), barL - 8f, mid + capHeight(lowP) / 2, lowP)
+                val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 4f; strokeCap = Paint.Cap.ROUND; color = s.faint(barL, mid) }
+                cv.drawLine(barL, mid, barR, mid, track)
+                track.color = s.accent(barL, mid)
+                cv.drawLine(a, mid, maxOf(b, a + 1f), mid, track)
+            } else cv.drawText(Weather.deg(d.min), right - 40f, mid + capHeight(lowP) / 2, lowP)
+        }
+    }
+
+    /** The week as columns, for the short wide widget when the hours are switched off. */
+    private fun weekColumns(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, top: Float, right: Float, bottom: Float) {
+        val days = fc.days.drop(1)
+        val n = ((right - left) / 52f).toInt().coerceIn(1, minOf(7, days.size))
+        val colW = (right - left) / n
+        val h = bottom - top
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val dayName = java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault())
+        for (i in 0 until n) {
+            val d = days[i]; val cx = left + colW * (i + 0.5f)
+            val lp = c.ink(11f, s.muted(cx, top), 500).apply { textAlign = Paint.Align.CENTER }
+            cv.textTop(runCatching { dayName.format(fmt.parse(d.date)!!) }.getOrDefault(""), cx, top, lp)
+            Glyphs.sky(cv, Weather.describe(d.code).second, true, cx, top + h * 0.45f, minOf(20f, h * 0.34f), s.ink(cx, top + h / 2), s.accent(cx, top + h / 2))
+            val tp = c.ink(12.5f, s.ink(cx, top + h), 600).apply { textAlign = Paint.Align.CENTER }
+            cv.drawText("${Weather.deg(d.max)} ${Weather.deg(d.min)}", cx, top + h, tp)
+        }
+    }
+
+    /** A detail's label and value, or null if the forecast does not have it. */
+    fun value(c: Context, fc: Forecast, item: WeatherOptions.Item): Pair<String, String>? = when (item) {
+        WeatherOptions.Item.FEELS -> fc.feels?.let { "Feels like" to Weather.deg(it) }
+        WeatherOptions.Item.HUMIDITY -> fc.humidity?.let { "Humidity" to "$it%" }
+        WeatherOptions.Item.WIND -> fc.wind?.let { "Wind" to ((fc.windDir?.let { d -> compass(d) + " " } ?: "") + "${Math.round(it)} mph") }
+        WeatherOptions.Item.UV -> fc.uv?.let { "UV index" to "${uvLevel(it)} · ${Math.round(it)}" }
+        WeatherOptions.Item.SUN -> sun(c, fc)
+        WeatherOptions.Item.AIR -> fc.aqi?.let { "Air quality" to "${aqiLevel(it)} · $it" }
+        WeatherOptions.Item.POLLEN -> fc.pollen?.let { "Pollen" to "${pollenLevel(it.second)} · ${it.first}" }
+        WeatherOptions.Item.PRESSURE -> fc.pressure?.let { "Pressure" to "${Math.round(it)} mb" }
+        WeatherOptions.Item.VISIBILITY -> fc.visibility?.let { "Visibility" to (if (it >= 10_000) "${Math.round(it / 1000)} km" else "%.1f km".format(it / 1000)) }
+        WeatherOptions.Item.DEW -> fc.dew?.let { "Dew point" to Weather.deg(it) }
+        else -> null
+    }
+
+    private fun compass(deg: Int): String {
+        val points = listOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
+        return points[(((deg % 360) + 360) % 360 * 16 + 180) / 360 % 16]
+    }
+
+    /** WHO's UV bands. */
+    private fun uvLevel(uv: Double) = when { uv < 3 -> "Low"; uv < 6 -> "Moderate"; uv < 8 -> "High"; uv < 11 -> "Very high"; else -> "Extreme" }
+
+    /** The European Air Quality Index's bands. */
+    private fun aqiLevel(a: Int) = when { a <= 20 -> "Good"; a <= 40 -> "Fair"; a <= 60 -> "Moderate"; a <= 80 -> "Poor"; a <= 100 -> "Very poor"; else -> "Extremely poor" }
+
+    /** Grains per cubic metre, in rough bands; an approximation, not an official scale. */
+    private fun pollenLevel(g: Double) = when { g < 1 -> "None"; g < 10 -> "Low"; g < 50 -> "Moderate"; g < 150 -> "High"; else -> "Very high" }
+
+    /** Whichever comes next, sunset today or sunrise tomorrow, in the phone's clock. */
+    private fun sun(c: Context, fc: Forecast): Pair<String, String>? {
+        val nowHm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
+        fun hm(iso: String) = iso.substring(11, 16)
+        fun show(hm: String): String {
+            val h = hm.take(2).toInt(); val m = hm.takeLast(2)
+            return if (android.text.format.DateFormat.is24HourFormat(c)) hm else "${if (h % 12 == 0) 12 else h % 12}:$m ${if (h < 12) "am" else "pm"}"
+        }
+        val rise = fc.sunrise?.let { hm(it) }; val set = fc.sunset?.let { hm(it) }
+        return when {
+            rise != null && nowHm < rise -> "Sunrise" to show(rise)
+            set != null && nowHm < set -> "Sunset" to show(set)
+            fc.nextSunrise != null -> "Sunrise" to show(hm(fc.nextSunrise))
+            else -> null
+        }
     }
 }

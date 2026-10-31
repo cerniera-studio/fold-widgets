@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Small: 500 x 430 px on the cover screen -->
+<!-- Weather · 4×2: Place, temperature, conditions and the next hours. A cover-screen cell is about 168 x 237 px. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="190dp"
+    android:minWidth="255dp"
     android:minHeight="164dp"
     android:minResizeWidth="72dp"
     android:minResizeHeight="72dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
     android:previewLayout="@layout/preview_weather"
-    android:description="@string/desc_weather"
+    android:description="@string/desc_weather_42"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

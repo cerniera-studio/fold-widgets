@@ -280,13 +280,36 @@ class ConfigureActivity : Activity() {
         window.navigationBarColor = Palette.GROUND
         val (scroll, column) = screen()
         column.addView(label("This widget", 32f, Palette.IVORY, display = true))
-        column.addView(label("Its finish. Default follows the choice in Fold Widgets.", 14f, Palette.MUTED).apply { setPadding(0, px(8), 0, 0) })
+        Widgets.kindOf(this, id)?.let { k -> column.addView(label(Widgets.describe(this, id, k), 14f, Palette.CHAMPAGNE, 500).apply { setPadding(0, px(6), 0, 0) }) }
+        column.addView(label("Its finish and what it shows. Default follows the choice in Fold Widgets.", 14f, Palette.MUTED).apply { setPadding(0, px(8), 0, 0) })
         column.addView(eyebrow("Finish"))
         column.addView(finishGrid(listOf<Finish?>(null) + Finish.entries,
             { f -> if (f == null) !Prefs.hasOwnFinish(this, id) else Prefs.hasOwnFinish(this, id) && Prefs.finish(this, id) == f }) { f ->
             Prefs.setFinish(this, id, f)
             Widgets.later { Widgets.render(this, id) }
         })
+        // Weather: what this widget shows beyond its minimum (31 Oct)
+        if (Widgets.kindOf(this, id) == Kind.WEATHER) {
+            column.addView(eyebrow("Shows"))
+            column.addView(label("Always: the place, the temperature and the conditions. Then, as the widget's size allows, whichever of these you choose, in this order.",
+                13f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), px(10)) })
+            column.addView(card().apply {
+                WeatherOptions.Item.entries.forEach { item ->
+                    val box = this
+                    var on = WeatherOptions.on(this@ConfigureActivity, id, item)
+                    lateinit var toggle: android.widget.TextView
+                    toggle = button(if (on) "Shown" else "Hidden", primary = on) {
+                        on = !on
+                        WeatherOptions.set(this@ConfigureActivity, id, item, on)
+                        toggle.text = if (on) "Shown" else "Hidden"
+                        toggle.setTextColor(if (on) Palette.GROUND else Palette.IVORY)
+                        toggle.background = if (on) rounded(Palette.CHAMPAGNE, px(18).toFloat()) else rounded(Palette.RAISED, px(18).toFloat(), Palette.HAIRLINE, px(1))
+                        Widgets.later { Widgets.render(this@ConfigureActivity, id) }
+                    }
+                    box.addView(row(item.label, item.note, toggle))
+                }
+            })
+        }
         column.addView(button("Done") { finish() }.apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })
         column.addView(View(this), LinearLayout.LayoutParams(-1, px(20)))
