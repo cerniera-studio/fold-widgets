@@ -52,9 +52,9 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
         // Over dark ground the glass deepens so ivory reads; over light it frosts so iron reads.
         // Either way it carries a good share of the ground's own colour.
         Finish.VETRO -> if (light) Face(tinted(0x121614, 0.40f, 0x6E), 0xFFF7F4EE.toInt(), 0x4DFFFFFF, 0xFFE2C48E.toInt())
-            else Face(tinted(0xF6F2EA, 0.32f, 0x9E), 0xFF15191A.toInt(), 0x80FFFFFF, 0xFF7A5A28.toInt())
+            else Face(tinted(0xF6F2EA, 0.32f, 0x9E), 0xFF15191A.toInt(), 0x80FFFFFF.toInt(), 0xFF7A5A28.toInt())
         Finish.CRISTALLO -> if (light) Face(tinted(0x0A0D0C, 0.25f, 0x38), 0xFFF7F4EE.toInt(), 0x66FFFFFF, 0xFFE2C48E.toInt())
-            else Face(tinted(0xFFFFFF, 0.20f, 0x47), 0xFF111415.toInt(), 0x80FFFFFF, 0xFF7A5A28.toInt())
+            else Face(tinted(0xFFFFFF, 0.20f, 0x47), 0xFF111415.toInt(), 0x80FFFFFF.toInt(), 0xFF7A5A28.toInt())
         Finish.MEMBRANE -> if (light) Face(tinted(0xF2EEE6, 0.42f, 0xC4), 0xFF141A16.toInt(), 0x26000000, 0xFF7A5A28.toInt())
             else Face(tinted(0x0E1210, 0.45f, 0xB8), 0xFFF4F1EA.toInt(), 0x24FFFFFF, 0xFFE2C48E.toInt())
         Finish.ROSSO -> if (light) Face(tinted(0xB8141E, 0.06f, 0xF0), 0xFFF6F1E6.toInt(), 0x55F6D9A8, 0xFFE9CF9E.toInt())
