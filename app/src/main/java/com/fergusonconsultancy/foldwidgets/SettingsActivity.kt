@@ -146,6 +146,17 @@ class SettingsActivity : Activity() {
                             }
                         }.start()
                     }))
+                // Link test: each kind of link, filled with a real Outlook email's ids, tried for real
+                Probe.sample(this@SettingsActivity)?.let { sample ->
+                    addView(label("Link test. Each button tries one way to open this email in Outlook: \"${sample.subject}\". Tell Claude which letters open the email itself, and which only open the inbox.",
+                        13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
+                    Probe.trials(sample).forEach { (name, link) ->
+                        addView(row(name, "", button("Try", primary = false) {
+                            val i = Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(Probe.OUTLOOK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { startActivity(i) }.onFailure { toast("${name.take(1)}: Outlook refused this link") }
+                        }))
+                    }
+                }
                 val main = Mailbox.mainOnly(this@SettingsActivity)
                 addView(row("Primary and Focused only", if (main) "As the apps notify: Gmail's Primary tab, Outlook's Focused inbox" else "Everything in both inboxes, promotions included",
                     button(if (main) "Show all" else "Main only", primary = false) {

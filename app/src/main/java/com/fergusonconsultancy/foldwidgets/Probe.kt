@@ -19,6 +19,32 @@ import java.util.zip.ZipFile
  */
 object Probe {
     const val OUTLOOK = "com.microsoft.office.outlook"
+    const val EXTRA_SOURCE = "fw.mailsource"
+
+    /** The newest Outlook-account email with its ids, to try each kind of link on. */
+    class Sample(val subject: String, val rest: String, val immutable: String?, val account: String)
+
+    fun sample(c: Context): Sample? = Mailbox.items(c).firstOrNull { it.source == Mailbox.OUTLOOK && it.link.isNotEmpty() }?.let {
+        val u = Uri.parse(it.link)
+        val rest = u.getQueryParameter("restID") ?: return null
+        Sample(it.subject, rest, u.getQueryParameter("immutableID"), it.account)
+    }
+
+    /** Every way in Outlook might take, filled with a real email's ids. */
+    fun trials(s: Sample): List<Pair<String, String>> {
+        val r = Uri.encode(s.rest); val i = s.immutable?.let { Uri.encode(it) }; val a = Uri.encode(s.account)
+        return listOfNotNull(
+            "A  message/open, both ids, account" to "ms-outlook://emails/message/open?restID=$r" + (i?.let { "&immutableID=$it" } ?: "") + "&account=$a",
+            "B  message/open, rest id, account" to "ms-outlook://emails/message/open?restID=$r&account=$a",
+            i?.let { "C  message/open, immutable id only" to "ms-outlook://emails/message/open?immutableID=$it" },
+            "D  message/open, rest id only" to "ms-outlook://emails/message/open?restID=$r",
+            "E  emails/open, restid" to "ms-outlook://emails/open?restid=$r&account=$a",
+            "F  web read link, address, rest id" to "https://outlook.office.com/mail/$a/applink/read/$r",
+            i?.let { "G  web read link, address, immutable id" to "https://outlook.office.com/mail/$a/applink/read/$it" },
+            "H  web read link, 0, rest id" to "https://outlook.office.com/mail/0/applink/read/$r",
+            "I  cloud read link, address, rest id" to "https://outlook.cloud.microsoft/mail/$a/applink/read/$r",
+        )
+    }
 
     fun note(c: Context, route: String, error: Throwable?) {
         val time = SimpleDateFormat("HH:mm:ss", Locale.UK).format(Date())

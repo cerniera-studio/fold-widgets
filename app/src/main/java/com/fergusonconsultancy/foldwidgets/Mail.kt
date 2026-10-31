@@ -329,9 +329,10 @@ object MailPainter : Painter {
      * message link, Gmail's conversation link), and only if both fail, the app.
      */
     private fun open(c: Context, m: MailItem, inbox: Act?): Act? {
-        val app = c.packageManager.getLaunchIntentForPackage(m.pkg)
+        val src = m.source.ifEmpty { "notification" } + if (m.link.isEmpty()) ", no message link" else ""
+        val app = c.packageManager.getLaunchIntentForPackage(m.pkg)?.putExtra(Probe.EXTRA_SOURCE, src)
         val deep = m.link.takeIf { it.isNotEmpty() }?.let {
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it)).setPackage(OUTLOOK_APP)
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it)).setPackage(OUTLOOK_APP).putExtra(Probe.EXTRA_SOURCE, src)
         }
         if (m.open == null && deep == null) return app?.let { Act.Open(intent = it) } ?: inbox
         return Act.Open(pending = m.open, intent = deep ?: app, fallback = if (deep != null) app else null)
