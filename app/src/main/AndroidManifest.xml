@@ -19,6 +19,10 @@
     <queries>
         <!-- Samsung Weather, opened by the weather widget -->
         <package android:name="com.sec.android.daemonapp" />
+        <!-- The email apps the mail widget can read and open -->
+        <package android:name="com.microsoft.office.outlook" />
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.samsung.android.email.provider" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -131,6 +135,14 @@
         <receiver android:name=".StorageSmall" android:exported="false" android:label="Storage">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/storage_small" />
+        </receiver>
+        <receiver android:name=".MailSmall" android:exported="false" android:label="Mail">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/mail_small" />
+        </receiver>
+        <receiver android:name=".MailLarge" android:exported="false" android:label="Mail · large">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/mail_large" />
         </receiver>
     </application>
 </manifest>

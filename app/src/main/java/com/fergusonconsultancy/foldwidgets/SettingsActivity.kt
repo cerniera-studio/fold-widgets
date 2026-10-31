@@ -49,7 +49,7 @@ class SettingsActivity : Activity() {
         column.addView(eyebrow("Access"))
         column.addView(card().apply {
             val music = Media.allowed(this@SettingsActivity)
-            addView(row("Music", "Follows Spotify, Poweramp or any player. Nothing is read from your notifications.",
+            addView(row("Music and mail", "Follows Spotify, Poweramp or any player. Notifications are read only for Mail, if you turn it on.",
                 if (music) status(true) else button("Allow") { startActivity(Media.accessIntent(this@SettingsActivity)) }))
             val cal = Agenda.allowed(this@SettingsActivity)
             addView(row("Calendar", "The agenda reads your calendars on the phone",
@@ -59,6 +59,25 @@ class SettingsActivity : Activity() {
                 if (wall) status(true) else button("Allow") {
                     startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
                 }))
+        })
+
+        // ---- Mail: opt-in, and only the apps chosen
+        column.addView(eyebrow("Mail"))
+        column.addView(card().apply {
+            val on = Mail.enabled(this@SettingsActivity)
+            addView(row("Show new mail", "Reads the notifications of the email apps below, and nothing else. Read or dismissed mail leaves the widget. Nothing is stored or sent.",
+                button(if (on) "Turn off" else "Turn on", primary = !on) {
+                    Mail.setEnabled(this@SettingsActivity, !on)
+                    if (!on && !Media.allowed(this@SettingsActivity)) startActivity(Media.accessIntent(this@SettingsActivity))
+                    build(); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
+                }))
+            if (on) Mail.APPS.forEach { (pkg, name) ->
+                if (!Mail.installed(this@SettingsActivity, pkg)) return@forEach
+                val read = pkg in Mail.apps(this@SettingsActivity)
+                addView(row(name, if (read) "Read" else "Not read", button(if (read) "Stop" else "Read", primary = false) {
+                    Mail.setApp(this@SettingsActivity, pkg, !read); build(); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
+                }))
+            }
         })
 
         // ---- Finish

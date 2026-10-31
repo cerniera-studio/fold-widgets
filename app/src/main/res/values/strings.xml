@@ -6,4 +6,5 @@
     <string name="desc_weather">Weather from Open-Meteo</string>
     <string name="desc_month">The month, today marked, busy days dotted</string>
     <string name="desc_storage">Storage used and free</string>
+    <string name="desc_mail">New mail from Outlook and Gmail, both accounts together</string>
 </resources>

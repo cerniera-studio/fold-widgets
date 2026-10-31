@@ -16,9 +16,9 @@ import android.os.PowerManager
 
 /**
  * The app's one long-lived part. Android keeps a notification listener running, and only a
- * notification listener may watch other apps' media sessions. It reads no notifications: it
- * watches the players, moves the progress line while the screen is on, and redraws every widget
- * when the wallpaper changes.
+ * notification listener may watch other apps' media sessions. It watches the players, moves the
+ * progress line while the screen is on, and redraws every widget when the wallpaper changes. It
+ * reads notifications only if Mail is turned on, and then only those of the email apps chosen.
  */
 class MediaListener : android.service.notification.NotificationListenerService() {
 
@@ -46,6 +46,8 @@ class MediaListener : android.service.notification.NotificationListenerService()
     }
 
     override fun onListenerConnected() {
+        instance = this
+        mailSoon()
         val msm = getSystemService(MediaSessionManager::class.java)
         sessions = msm
         runCatching {
@@ -58,6 +60,7 @@ class MediaListener : android.service.notification.NotificationListenerService()
     }
 
     override fun onListenerDisconnected() {
+        instance = null
         runCatching { sessions?.removeOnActiveSessionsChangedListener(onSessions) }
         runCatching { WallpaperManager.getInstance(this).removeOnColorsChangedListener(onWallpaper) }
         runCatching { unregisterReceiver(onScreen) }
@@ -82,6 +85,21 @@ class MediaListener : android.service.notification.NotificationListenerService()
     }
 
     private fun soon() { main.removeCallbacks(redraw); main.postDelayed(redraw, 160) }
+
+    // ---- Mail: redrawn when an email app's notifications change --------------------------------
+    private val mailRedraw = Runnable { Widgets.later { Widgets.renderAll(this, Kind.MAIL) } }
+    private fun mailSoon() { main.removeCallbacks(mailRedraw); main.postDelayed(mailRedraw, 400) }
+
+    private fun isMail(sbn: android.service.notification.StatusBarNotification?) =
+        sbn != null && Mail.enabled(this) && sbn.packageName in Mail.apps(this)
+
+    override fun onNotificationPosted(sbn: android.service.notification.StatusBarNotification?) { if (isMail(sbn)) mailSoon() }
+    override fun onNotificationRemoved(sbn: android.service.notification.StatusBarNotification?) { if (isMail(sbn)) mailSoon() }
+
+    companion object {
+        /** The running listener, from which the mail widget reads the notifications on screen. */
+        @Volatile var instance: MediaListener? = null
+    }
 
     /** While something plays and the screen is on, the line moves once a second; nothing else is redrawn. */
     private val tick = object : Runnable {
