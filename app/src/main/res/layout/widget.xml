@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every widget is one picture drawn at its exact size, with invisible touch areas laid over
+     the parts that act, and a progress line that can move without redrawing the picture. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layoutDirection="ltr"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/face"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:importantForAccessibility="no" />
+
+    <ProgressBar
+        android:id="@+id/progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_gravity="top|start"
+        android:indeterminate="false"
+        android:max="1000"
+        android:progressDrawable="@drawable/progress_line"
+        android:visibility="gone" />
+
+
+    <FrameLayout android:id="@+id/hit0" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit1" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit2" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit3" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit4" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit5" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit6" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit7" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit8" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit9" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit10" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit11" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+</FrameLayout>

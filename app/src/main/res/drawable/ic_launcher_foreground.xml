@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The two widgets as they sit on the cover screen: the small pane above, the large below.
+     The large pane is glass, lit along its top edge only; the small one carries the play disc. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Small pane -->
+    <path android:fillColor="#33F6F1E6" android:strokeColor="#FFF6F1E6" android:strokeWidth="1.6"
+        android:pathData="M36,30h18a5,5 0 0 1 5,5v11a5,5 0 0 1 -5,5h-18a5,5 0 0 1 -5,-5v-11a5,5 0 0 1 5,-5z"/>
+    <path android:pathData="M48.5,40.5m-4,0a4,4 0 1 1 8,0a4,4 0 1 1 -8,0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="44" android:startY="36" android:endX="53" android:endY="45">
+                <item android:offset="0" android:color="#FFF7E6C2"/>
+                <item android:offset="1" android:color="#FFB8995F"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Large pane: frosted glass -->
+    <path android:fillColor="#40F6F1E6"
+        android:pathData="M37,56h33a6,6 0 0 1 6,6v12a6,6 0 0 1 -6,6h-33a6,6 0 0 1 -6,-6v-12a6,6 0 0 1 6,-6z"/>
+    <path android:strokeWidth="1.6"
+        android:pathData="M37,56h33a6,6 0 0 1 6,6v12a6,6 0 0 1 -6,6h-33a6,6 0 0 1 -6,-6v-12a6,6 0 0 1 6,-6z">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="56" android:endX="0" android:endY="80">
+                <item android:offset="0" android:color="#FFFFF8EC"/>
+                <item android:offset="1" android:color="#80D9BB86"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- The agenda's lines inside the large pane -->
+    <path android:fillColor="#FFD9BB86" android:pathData="M37,62.5h2a0.8,0.8 0 0 1 0.8,0.8v4.4a0.8,0.8 0 0 1 -0.8,0.8h-2a0.8,0.8 0 0 1 -0.8,-0.8v-4.4a0.8,0.8 0 0 1 0.8,-0.8z"/>
+    <path android:fillColor="#CCF6F1E6" android:pathData="M43,64.6h22a0.9,0.9 0 0 1 0,1.8h-22a0.9,0.9 0 0 1 0,-1.8z"/>
+    <path android:fillColor="#80F6F1E6" android:pathData="M43,71.6h15a0.9,0.9 0 0 1 0,1.8h-15a0.9,0.9 0 0 1 0,-1.8z"/>
+</vector>

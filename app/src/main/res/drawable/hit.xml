@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A soft press: a neutral wash that reads on light glass and dark alike -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#26808080">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle"><corners android:radius="14dp" /><solid android:color="#FFFFFFFF" /></shape>
+    </item>
+</ripple>

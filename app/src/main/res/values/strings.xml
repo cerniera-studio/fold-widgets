@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fold Widgets</string>
+    <string name="desc_music">Whatever is playing, from Spotify, Poweramp or any player</string>
+    <string name="desc_agenda">The days ahead from your calendars</string>
+    <string name="desc_weather">Weather from Open-Meteo</string>
+</resources>

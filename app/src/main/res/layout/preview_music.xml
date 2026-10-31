@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget picker's preview: the smoked finish in still form -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="bottom|start" android:padding="16dp"
+    android:background="@drawable/preview_ground">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Spotify" android:textColor="#FFD9BB86" android:textSize="11sp" android:letterSpacing="0.2" android:textAllCaps="true" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Tokyo Drift" android:textColor="#FFF6F1E6" android:textSize="26sp" android:fontFamily="serif" />
+</LinearLayout>

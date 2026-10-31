@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small: 500 x 430 px on the cover screen -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="190dp"
+    android:minHeight="164dp"
+    android:minResizeWidth="72dp"
+    android:minResizeHeight="72dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget"
+    android:previewLayout="@layout/preview_music"
+    android:description="@string/desc_music"
+    android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

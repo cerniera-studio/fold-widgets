@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Large: 672 x 706 px on the cover screen -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="256dp"
+    android:minHeight="269dp"
+    android:minResizeWidth="72dp"
+    android:minResizeHeight="72dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget"
+    android:previewLayout="@layout/preview_weather"
+    android:description="@string/desc_weather"
+    android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional" />
