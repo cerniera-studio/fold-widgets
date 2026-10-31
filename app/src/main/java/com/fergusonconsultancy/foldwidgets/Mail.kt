@@ -235,15 +235,32 @@ object MailPainter : Painter {
         val x0 = p + (if (bare) 0f else icon + 11f)
         val width = s.w - p - x0
         val labelP = c.ink(11f, s.muted(s.w / 2, y), 600, tracking = 0.16f)
+        // First, how many rows fit; then the room left over is shared between them, so the list fills
+        // the widget instead of stopping short above an empty band
+        fun plan(): Pair<Int, Float> {
+            var yy = y; var n = 0; var done = false
+            for ((i, m) in items.withIndex()) {
+                val row = if (tall && m.preview.isEmpty()) 44f else rowH
+                val reserve = if (i < items.size - 1 && !bare) 18f else 0f
+                val div = !bare && !m.fresh && !done && fresh > 0
+                val dh = if (div) 26f else 0f
+                if (yy + dh + row + reserve > s.h - p + 2f) break
+                if (!m.fresh) done = true
+                yy += dh + row; n++
+            }
+            val more = if (n < items.size && !bare) 18f else 0f
+            val slack = s.h - p - (yy + more)
+            return n to if (n > 1 && !bare) (slack / n).coerceIn(0f, 10f) else 0f
+        }
+        val (fits, extra) = plan()
         var shown = 0
         var dividerDone = false
         for ((i, m) in items.withIndex()) {
-            val thisRow = if (tall && m.preview.isEmpty()) 44f else rowH
-            val reserve = if (i < items.size - 1 && !bare) 18f else 0f
+            if (shown >= fits) break
+            val thisRow = (if (tall && m.preview.isEmpty()) 44f else rowH) + extra
             // A quiet divider where read mail begins, only when unread mail sits above it
             val divider = !bare && !m.fresh && !dividerDone && fresh > 0
             val dividerH = if (divider) 26f else 0f
-            if (y + dividerH + thisRow + reserve > s.h - p + 2f) break
             if (divider) {
                 labelP.color = s.muted(s.w / 2, y + 10f)
                 canvas.textTop(if (boxes) "READ" else "EARLIER", x0, y + 4f, labelP)
@@ -274,7 +291,7 @@ object MailPainter : Painter {
                     canvas.drawText(fit(m.preview, previewP, width), x0, mid + 37f + capHeight(previewP) / 2, previewP)
                 }
             }
-            open(c, m, inbox)?.let { if (hits.size < 12) hits += Hit(RectF(0f, y - 3f, s.w, y + thisRow - gap + 3f), it, "${m.sender}: ${m.subject}") }
+            open(c, m, inbox)?.let { if (hits.size < 12) hits += Hit(RectF(0f, y - 3f, s.w, y + thisRow - gap - extra + 3f), it, "${m.sender}: ${m.subject}") }
             y += thisRow
             shown++
         }
