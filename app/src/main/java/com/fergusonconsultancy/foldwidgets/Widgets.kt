@@ -85,6 +85,7 @@ object Widgets {
     const val EXTRA_SIZE = "fw.size"
     const val EXTRA_PENDING = "fw.pending"
     const val EXTRA_TARGET = "fw.target"
+    const val EXTRA_ROOT = "fw.root"
 
     private val providers = mapOf(
         Kind.MUSIC to listOf(MusicSmall::class.java, MusicLarge::class.java),
@@ -119,35 +120,62 @@ object Widgets {
     fun renderAll(c: Context, kind: Kind? = null) =
         (if (kind == null) Kind.entries else listOf(kind)).forEach { k -> ids(c, k).forEach { render(c, it) } }
 
-    /** The widget's size in dp: the first size the launcher reports, else its portrait bounds. */
-    fun sizeOf(c: Context, id: Int): SizeF {
+    /** The size the launcher reports for widget [id], in dp, for the screen's orientation. */
+    fun reportedSize(c: Context, id: Int): SizeF {
         val o = AppWidgetManager.getInstance(c).getAppWidgetOptions(id)
         @Suppress("DEPRECATION")
-        val sizes = o.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
-        sizes?.firstOrNull()?.takeIf { it.width > 0 && it.height > 0 }?.let { return it }
-        val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-        val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+        val sizes = o.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)?.filter { it.width > 0 && it.height > 0 }
+        val screen = Backdrop.screenSize(c)
+        val portrait = screen.y >= screen.x
+        if (!sizes.isNullOrEmpty()) {
+            // One size per orientation: the narrower one is the portrait one
+            return if (portrait) sizes.minBy { it.width / it.height } else sizes.maxBy { it.width / it.height }
+        }
+        val w = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+        val h = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
         if (w > 0 && h > 0) return SizeF(w.toFloat(), h.toFloat())
         val info = AppWidgetManager.getInstance(c).getAppWidgetInfo(id)
-        val d = c.resources.displayMetrics.density
-        return SizeF((info?.minWidth ?: 380) / d, (info?.minHeight ?: 330) / d)
+        val d = Backdrop.density(c)
+        return SizeF((info?.minWidth ?: 500) / d, (info?.minHeight ?: 430) / d)
+    }
+
+    /** The picture's size in pixels and the density it is drawn at. Its size in dp is px / density. */
+    class Frame(val px: Int, val py: Int, val density: Float) {
+        val dp get() = SizeF(px / density, py / density)
+    }
+
+    /**
+     * The exact pixels the widget occupies, once a tap on it has measured them; until then the
+     * launcher's report. Drawing to the true pixel size means the picture is shown 1:1, with no
+     * resampling, which is what keeps text as sharp as the system's own.
+     */
+    fun frameOf(c: Context, id: Int): Frame {
+        val d = Backdrop.density(c)
+        val seat = Backdrop.seat(c, id)
+        val screen = Backdrop.screenSize(c)
+        if (seat != null && seat.exact && seat.screenW == screen.x && seat.screenH == screen.y)
+            return Frame(Math.round(seat.width), Math.round(seat.height), d)
+        val r = reportedSize(c, id)
+        return Frame(Math.round(r.width * d), Math.round(r.height * d), d)
     }
 
     /** Draws widget [id] at its size and hands it to the launcher. */
     fun render(c: Context, id: Int) {
         val kind = kindOf(c, id) ?: return
-        val size = sizeOf(c, id)
-        val (bitmap, scene) = draw(c, id, kind, size, Prefs.finish(c, id), Backdrop.ground(c, id))
+        val frame = frameOf(c, id)
+        val size = frame.dp
+        val (bitmap, scene) = draw(c, id, kind, frame, Prefs.finish(c, id), Backdrop.ground(c, id))
         val rv = RemoteViews(c.packageName, R.layout.widget)
         rv.setImageViewBitmap(R.id.face, bitmap)
         rv.setContentDescription(R.id.face, kind.name.lowercase())
         HITS.forEachIndexed { i, viewId ->
             val hit = scene.hits.getOrNull(i)
             if (hit == null) { rv.setViewVisibility(viewId, View.GONE); return@forEachIndexed }
-            place(rv, viewId, hit.rect)
+            val root = isRoot(hit.rect, size)
+            if (root) fill(rv, viewId) else place(rv, viewId, hit.rect)
             rv.setViewVisibility(viewId, View.VISIBLE)
             rv.setContentDescription(viewId, hit.label)
-            rv.setOnClickPendingIntent(viewId, pendingFor(c, id, i, hit, size))
+            rv.setOnClickPendingIntent(viewId, pendingFor(c, id, i, hit, size, root))
         }
         val line = scene.line
         if (line == null) rv.setViewVisibility(R.id.progress, View.GONE) else {
@@ -158,6 +186,24 @@ object Widgets {
             rv.setColorStateList(R.id.progress, "setProgressBackgroundTintList", ColorStateList.valueOf(line.track))
         }
         AppWidgetManager.getInstance(c).updateAppWidget(id, rv)
+        // What was reported, what was measured and what was drawn, for the settings screen
+        val r = reportedSize(c, id)
+        val seat = Backdrop.seat(c, id)
+        Prefs.of(c).edit().putString("diag_$id", "${kind.name.lowercase()}: reported ${r.width.toInt()} x ${r.height.toInt()} dp, " +
+            (if (seat?.exact == true) "measured ${seat.width.toInt()} x ${seat.height.toInt()} px" else "not yet measured (tap it once)") +
+            ", drawn ${bitmap.width} x ${bitmap.height} px at ${"%.3f".format(frame.density)}").apply()
+    }
+
+    /** A touch area covering the whole widget: laid out to fill it, so a tap on it measures it. */
+    private fun isRoot(r: RectF, size: SizeF) =
+        r.left <= 0.5f && r.top <= 0.5f && r.right >= size.width - 0.5f && r.bottom >= size.height - 0.5f
+
+    private fun fill(rv: RemoteViews, viewId: Int) {
+        val px = TypedValue.COMPLEX_UNIT_PX
+        rv.setViewLayoutWidth(viewId, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
+        rv.setViewLayoutHeight(viewId, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
+        rv.setViewLayoutMargin(viewId, RemoteViews.MARGIN_LEFT, 0f, px)
+        rv.setViewLayoutMargin(viewId, RemoteViews.MARGIN_TOP, 0f, px)
     }
 
     /** Moves the progress line without redrawing the picture: cheap enough to do every second. */
@@ -171,17 +217,18 @@ object Widgets {
      * The picture. Drawn on a canvas scaled to dp, so painters think in dp and the result is
      * sharp at the screen's density. [ground] is what is behind the widget.
      */
-    fun draw(c: Context, id: Int, kind: Kind, size: SizeF, finish: Finish, ground: Ground): Pair<Bitmap, Scene> {
-        var d = c.resources.displayMetrics.density
+    fun draw(c: Context, id: Int, kind: Kind, frame: Frame, finish: Finish, ground: Ground): Pair<Bitmap, Scene> {
+        var d = frame.density
+        var px = frame.px.coerceAtLeast(1); var py = frame.py.coerceAtLeast(1)
         // Stay well inside what a launcher will accept for one widget's picture
-        val longest = maxOf(size.width, size.height) * d
-        if (longest > 1400f) d *= 1400f / longest
-        val bmp = Bitmap.createBitmap((size.width * d).toInt().coerceAtLeast(1), (size.height * d).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val longest = maxOf(px, py)
+        if (longest > 1800) { val f = 1800f / longest; d *= f; px = (px * f).toInt(); py = (py * f).toInt() }
+        val size = SizeF(px / d, py / d)
+        val bmp = Bitmap.createBitmap(px, py, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp).apply { scale(d, d) }
         val surface = Surface(finish, ground, size.width, size.height, Prefs.radius(c).toFloat().coerceAtMost(minOf(size.width, size.height) / 2f), 1.1f / d)
         surface.paint(canvas)
-        Type.glass = surface.glassy
-        val scene = try { kind.painter.paint(c, id, canvas, surface) } finally { Type.glass = false }
+        val scene = kind.painter.paint(c, id, canvas, surface)
         return bmp to scene
     }
 
@@ -198,13 +245,14 @@ object Widgets {
      * its seat. Mutable on purpose: the launcher fills in the touch's bounds on the way through,
      * and an immutable intent would drop them. The intents are explicit, to our own components.
      */
-    private fun pendingFor(c: Context, id: Int, index: Int, hit: Hit, size: SizeF): PendingIntent {
+    private fun pendingFor(c: Context, id: Int, index: Int, hit: Hit, size: SizeF, root: Boolean): PendingIntent {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         val code = id * 32 + index
         fun Intent.mark() = apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
             putExtra(EXTRA_HIT, floatArrayOf(hit.rect.left, hit.rect.top, hit.rect.right, hit.rect.bottom))
             putExtra(EXTRA_SIZE, floatArrayOf(size.width, size.height))
+            putExtra(EXTRA_ROOT, root)
             data = Uri.parse("foldwidgets://tap/$id/$index")
         }
         return when (val act = hit.act) {
@@ -225,7 +273,7 @@ object Widgets {
     fun seatFrom(c: Context, i: Intent) {
         val id = i.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        if (Backdrop.record(c, i, id, hitOf(i), sizeOf(i))) later { render(c, id) }
+        if (Backdrop.record(c, i, id, hitOf(i), sizeOf(i), i.getBooleanExtra(EXTRA_ROOT, false))) later { render(c, id) }
     }
 
     private val HITS = intArrayOf(R.id.hit0, R.id.hit1, R.id.hit2, R.id.hit3, R.id.hit4, R.id.hit5,

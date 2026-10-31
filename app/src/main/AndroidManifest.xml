@@ -17,6 +17,8 @@
 
     <!-- Naming and opening whichever player is active -->
     <queries>
+        <!-- Samsung Weather, opened by the weather widget -->
+        <package android:name="com.sec.android.daemonapp" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

@@ -24,6 +24,10 @@ enum class Finish(val label: String, val fill: Int, val ink: Int, val edge: Int,
      * the very edge. A light veil only, so the wallpaper stays the subject.
      */
     CRISTALLO("Cristallo clear (adaptive)", 0x30101412, 0xFFF4F1EA.toInt(), 0x66FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
+    /**
+     * Smoked glass (31 Oct): always dark and sombre, translucent, thicker and darker towards its
+     * edges as real smoked glass is where the light passes through more of it. Adapts its depth.
+     */
     SMOKE("Smoked glass (adaptive)", 0xDB121614.toInt(), 0xFFE6E8E2.toInt(), 0x14FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     MEMBRANE("Membrane (adaptive)", 0xC8141816.toInt(), 0xFFEDEAE2.toInt(), 0x1AFFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     ROSSO("Rosso lacquer (adaptive)", 0xF0861018.toInt(), 0xFFF6F1E6.toInt(), 0x40D9BB86, 0xFFD9BB86.toInt(), adaptive = true),
@@ -53,8 +57,9 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
         // Either way it carries a good share of the ground's own colour.
         Finish.VETRO -> if (light) Face(tinted(0x121614, 0.40f, 0x6E), 0xFFF7F4EE.toInt(), 0x4DFFFFFF, 0xFFE2C48E.toInt())
             else Face(tinted(0xF6F2EA, 0.32f, 0x9E), 0xFF15191A.toInt(), 0x80FFFFFF.toInt(), 0xFF7A5A28.toInt())
-        Finish.CRISTALLO -> if (light) Face(tinted(0x0A0D0C, 0.25f, 0x38), 0xFFF7F4EE.toInt(), 0x66FFFFFF, 0xFFE2C48E.toInt())
-            else Face(tinted(0xFFFFFF, 0.20f, 0x47), 0xFF111415.toInt(), 0x80FFFFFF.toInt(), 0xFF7A5A28.toInt())
+        // Enough veil that type reads without a shadow, little enough that the wallpaper stays the subject
+        Finish.CRISTALLO -> if (light) Face(tinted(0x0A0D0C, 0.22f, 0x54), 0xFFF7F4EE.toInt(), 0x66FFFFFF, 0xFFE2C48E.toInt())
+            else Face(tinted(0xFFFFFF, 0.18f, 0x61), 0xFF111415.toInt(), 0x80FFFFFF.toInt(), 0xFF7A5A28.toInt())
         Finish.MEMBRANE -> if (light) Face(tinted(0xF2EEE6, 0.42f, 0xC4), 0xFF141A16.toInt(), 0x26000000, 0xFF7A5A28.toInt())
             else Face(tinted(0x0E1210, 0.45f, 0xB8), 0xFFF4F1EA.toInt(), 0x24FFFFFF, 0xFFE2C48E.toInt())
         Finish.ROSSO -> if (light) Face(tinted(0xB8141E, 0.06f, 0xF0), 0xFFF6F1E6.toInt(), 0x55F6D9A8, 0xFFE9CF9E.toInt())
@@ -72,8 +77,10 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
             if (light) Face(glaze, 0xFF14181A.toInt(), 0x66FFFFFF, 0xFF6E4A16.toInt())
             else Face(glaze, 0xFFF4F1EA.toInt(), 0x40FFFFFF, 0xFFE9CF9E.toInt())
         }
-        Finish.SMOKE -> if (light) Face(tinted(0xF4F0E8, 0.10f, 0xE8), 0xFF1A201C.toInt(), 0x1F000000, 0xFF8C6A33.toInt())
-            else Face(tinted(0x101412, 0.14f, 0xDB), 0xFFEDEAE2.toInt(), 0x1AFFFFFF, 0xFFD3B27C.toInt())
+        // Smoke is always the dark one (31 Oct): sombre over everything. What adapts is its depth and
+        // its trace of colour: deepest over dark ground, a shade denser over light so ivory still reads
+        Finish.SMOKE -> if (light) Face(tinted(0x080A09, 0.14f, 0xCC), 0xFFEDEAE2.toInt(), 0x14FFFFFF, 0xFFD3B27C.toInt())
+            else Face(tinted(0x0E1110, 0.07f, 0xE8), 0xFFEDEAE2.toInt(), 0x1FFFFFFF, 0xFFD3B27C.toInt())
         else -> Face(finish.fill, finish.ink, finish.edge, finish.indicator)
     }
 }

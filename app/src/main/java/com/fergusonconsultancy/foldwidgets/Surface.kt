@@ -56,6 +56,7 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         when (finish) {
             Finish.VETRO -> frost(c)
             Finish.CRISTALLO -> crystal(c)
+            Finish.SMOKE -> { zones(c, Face::fill); edges(c) }
             else -> zones(c, Face::fill)
         }
         c.restore()
@@ -107,6 +108,18 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         }
         zones(c, Face::fill)
         sheen(c, 0x14)
+    }
+
+    /**
+     * Smoked glass is darker towards its edges, where light crosses more of it: a soft fall of
+     * shade from the middle outwards. The force is the glass's thickness.
+     */
+    private fun edges(c: Canvas) {
+        val r = maxOf(w, h) * 0.75f
+        c.drawRect(0f, 0f, w, h, Paint().apply {
+            shader = android.graphics.RadialGradient(w / 2f, h * 0.45f, r, intArrayOf(0x00000000, 0x00000000, 0x47000000),
+                floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+        })
     }
 
     /** Light entering the top of the slab, fading by half way down. */

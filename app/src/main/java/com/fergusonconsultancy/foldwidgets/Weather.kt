@@ -122,6 +122,15 @@ object Weather {
     }
 
     fun deg(t: Double) = "${Math.round(t)}°"
+
+    /** Samsung Weather's package (verified against its APK listings). */
+    private const val SAMSUNG_WEATHER = "com.sec.android.daemonapp"
+
+    /** Opens Samsung Weather; on a phone without it, fetches the forecast again instead. */
+    fun openApp(c: Context): Act {
+        val launch = c.packageManager.getLaunchIntentForPackage(SAMSUNG_WEATHER)
+        return if (launch != null) Act.Open(intent = launch) else Act.Send(TapReceiver.ACTION_WEATHER)
+    }
 }
 
 /**
@@ -145,7 +154,7 @@ object WeatherPainter : Painter {
             val noteP = c.ink(11.5f * k, s.muted(s.w / 2, s.h / 2))
             val note = if (place == null) "Tap to choose a place" else "Fetching ${place.name}…"
             wrap(note, noteP, s.w - 2 * p, 2).forEachIndexed { i, l -> canvas.textTop(l, p, p + titleP.textSize * 1.4f + i * noteP.textSize * 1.3f, noteP) }
-            val act = if (place == null) Act.Open(intent = Intent(c, SettingsActivity::class.java)) else Act.Send(TapReceiver.ACTION_WEATHER)
+            val act = if (place == null) Act.Open(intent = Intent(c, SettingsActivity::class.java)) else Weather.openApp(c)
             return Scene(listOf(Hit(all, act, "Weather")))
         }
 
@@ -197,7 +206,7 @@ object WeatherPainter : Painter {
                 canvas.drawText(Weather.deg(hr.temp), cx + 2f * k, top + stripH, tP)
             }
         }
-        // A tap fetches the weather again
-        return Scene(listOf(Hit(all, Act.Send(TapReceiver.ACTION_WEATHER), "Refresh weather")))
+        // A tap opens Samsung Weather (31 Oct); the forecast here refreshes on its own
+        return Scene(listOf(Hit(all, Weather.openApp(c), "Open Weather")))
     }
 }

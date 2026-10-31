@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Large: 672 x 706 px on the cover screen -->
+<!-- Opens at 4x4 on the cover screen: a cell there is about 168 x 237 px (31 Oct, from Mechack's screenshots) -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="256dp"
-    android:minHeight="269dp"
+    android:minWidth="255dp"
+    android:minHeight="361dp"
     android:minResizeWidth="72dp"
     android:minResizeHeight="72dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"

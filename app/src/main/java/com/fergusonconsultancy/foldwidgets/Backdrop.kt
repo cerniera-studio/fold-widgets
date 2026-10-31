@@ -29,15 +29,20 @@ import android.view.Display
  */
 object Backdrop {
 
-    /** Where a widget sits: its bounds on a screen of [screenW] x [screenH] px. */
-    data class Seat(val left: Float, val top: Float, val width: Float, val height: Float, val screenW: Int, val screenH: Int) {
+    /**
+     * Where a widget sits: its bounds on a screen of [screenW] x [screenH] px. [exact] when the
+     * bounds came from the widget's full-size touch area, so the size is the size the launcher
+     * really gives it, to the pixel, not what it reports.
+     */
+    data class Seat(val left: Float, val top: Float, val width: Float, val height: Float, val screenW: Int, val screenH: Int,
+                    val exact: Boolean = false) {
         /** The cover screen is tall and narrow; the main screen is close to square. */
         val onCover get() = screenH > screenW * 1.6f || screenW > screenH * 1.6f
-        fun encode() = listOf(left, top, width, height, screenW, screenH).joinToString(",")
+        fun encode() = listOf(left, top, width, height, screenW, screenH, if (exact) 1 else 0).joinToString(",")
         companion object {
             fun decode(s: String?): Seat? = runCatching {
                 val p = s!!.split(",")
-                Seat(p[0].toFloat(), p[1].toFloat(), p[2].toFloat(), p[3].toFloat(), p[4].toInt(), p[5].toInt())
+                Seat(p[0].toFloat(), p[1].toFloat(), p[2].toFloat(), p[3].toFloat(), p[4].toInt(), p[5].toInt(), p.getOrNull(6) == "1")
             }.getOrNull()
         }
     }
@@ -45,23 +50,40 @@ object Backdrop {
     fun seat(c: Context, id: Int): Seat? = Seat.decode(Prefs.of(c).getString("seat_$id", null))
 
     /**
-     * Records where widget [id] sits, from a tap's [intent]: its source bounds are the tapped area's
-     * rectangle on screen, and [hit] is that area inside a widget of [sizeDp]. Returns true if the
-     * seat moved, so the caller can redraw the widget against its new ground.
+     * Records where widget [id] sits, from a tap's [intent]. Its source bounds are the tapped area's
+     * rectangle on screen. When the area is the widget's full-size one ([root]), those bounds are
+     * the widget itself, exactly. Otherwise [hit] says where the area sits inside the widget, in dp,
+     * which places the widget but cannot measure it. Returns true if the seat changed, so the
+     * caller redraws the widget at its true size and against its new ground.
      */
-    fun record(c: Context, intent: Intent, id: Int, hit: RectF?, sizeDp: android.util.SizeF?): Boolean {
+    fun record(c: Context, intent: Intent, id: Int, hit: RectF?, sizeDp: android.util.SizeF?, root: Boolean): Boolean {
         val b = intent.sourceBounds ?: return false
-        if (hit == null || sizeDp == null || hit.width() <= 0f || b.width() <= 0) return false
-        // px per dp as the launcher actually drew it, measured rather than assumed
-        val scale = b.width() / hit.width()
+        if (b.width() <= 0) return false
         val screen = screenSize(c)
-        val seat = Seat(b.left - hit.left * scale, b.top - hit.top * scale, sizeDp.width * scale, sizeDp.height * scale, screen.x, screen.y)
         val old = seat(c, id)
-        val moved = old == null || old.screenW != seat.screenW || old.screenH != seat.screenH ||
-            Math.abs(old.left - seat.left) > 3f || Math.abs(old.top - seat.top) > 3f ||
-            Math.abs(old.width - seat.width) > 3f || Math.abs(old.height - seat.height) > 3f
+        val seat = if (root) Seat(b.left.toFloat(), b.top.toFloat(), b.width().toFloat(), b.height().toFloat(), screen.x, screen.y, true) else {
+            if (hit == null || sizeDp == null || hit.width() <= 0f) return false
+            val d = density(c)
+            val left = b.left - hit.left * d; val top = b.top - hit.top * d
+            if (old != null && old.exact && old.screenW == screen.x && old.screenH == screen.y) old.copy(left = left, top = top)
+            else Seat(left, top, sizeDp.width * d, sizeDp.height * d, screen.x, screen.y)
+        }
+        val moved = old == null || old.screenW != seat.screenW || old.screenH != seat.screenH || old.exact != seat.exact ||
+            Math.abs(old.left - seat.left) > 2f || Math.abs(old.top - seat.top) > 2f ||
+            Math.abs(old.width - seat.width) > 1f || Math.abs(old.height - seat.height) > 1f
         if (moved) Prefs.of(c).edit().putString("seat_$id", seat.encode()).apply()
         return moved
+    }
+
+    /**
+     * The density of the screen in use now. On a Fold the app's own resources can carry the other
+     * screen's density, if the process started while the phone was open; drawing at that density
+     * makes a picture the launcher then has to stretch, which is blur.
+     */
+    fun density(c: Context): Float {
+        val d = c.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+            ?: return c.resources.displayMetrics.density
+        return runCatching { c.createDisplayContext(d).resources.displayMetrics.density }.getOrDefault(c.resources.displayMetrics.density)
     }
 
     /** The real size of the screen in use now: the cover screen when folded, the main one when open. */

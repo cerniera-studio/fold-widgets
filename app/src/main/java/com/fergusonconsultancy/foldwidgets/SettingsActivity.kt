@@ -123,6 +123,20 @@ class SettingsActivity : Activity() {
             }
         })
 
+        // ---- Sizes: what each widget was told and what it measured, for tuning on the phone
+        val placed = Kind.entries.flatMap { Widgets.ids(this, it).toList() }
+        if (placed.isNotEmpty()) {
+            column.addView(eyebrow("Sharpness"))
+            column.addView(card().apply {
+                addView(label("Each widget is drawn to the exact pixels it occupies once you have tapped it. Until then it uses the size the launcher reports, which may be wrong and look soft.",
+                    13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
+                placed.forEach { id ->
+                    val d = Prefs.of(this@SettingsActivity).getString("diag_$id", null) ?: return@forEach
+                    addView(label(d, 12.5f, if (d.contains("measured")) Palette.IVORY else Palette.WARN).apply { setPadding(0, px(8), 0, px(8)) })
+                }
+            })
+        }
+
         column.addView(eyebrow("How it works"))
         column.addView(label(NOTES, 13.5f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), 0) })
     }
@@ -222,7 +236,7 @@ class SettingsActivity : Activity() {
             "your first tap. Until then it reads the wallpaper's overall colour.\n\n" +
             "The glass is the wallpaper itself, thickened. Cristallo is clear: near its rim it bends in what lies just beyond the edge, " +
             "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Both carry one highlight at the upper left, " +
-            "cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat.\n\n" +
+            "cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat, and its size is the launcher's guess: one tap measures it.\n\n" +
             "As a widget gets smaller, things fall away in a fixed order until only the vital thing is left: the play disc, today's date, " +
             "the temperature, the share of storage used. Music has one control, play and pause; any other tap opens the player.\n\n" +
             "The music widget follows the player Android marks as active. Playing beats paused; among equals, the most recent wins."
