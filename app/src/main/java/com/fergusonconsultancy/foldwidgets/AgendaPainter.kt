@@ -94,6 +94,9 @@ object AgendaPainter : Painter {
         val k = if (large) minOf(s.w / 256f, s.h / 269f).coerceIn(0.8f, 1.6f) else minOf(s.w / 190f, s.h / 164f).coerceIn(0.66f, 1.4f)
         val p = (if (large) 18f else 14f) * k
         val wide = s.w > s.h * 1.55f && s.w >= 240f
+        // Concentrato: below this the month's name, the day headings and the count of the rest fall
+        // away, leaving the date and what is next
+        val bare = minOf(s.w, s.h) < 130f
         val hits = ArrayList<Hit>()
         val now = System.currentTimeMillis()
 
@@ -109,7 +112,7 @@ object AgendaPainter : Painter {
         val tx = p + numW + 10f * k
         val capNum = capHeight(numP)
         canvas.drawText(fit(SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.time), dayP, headW - (tx - p)), tx, p + capNum * 0.46f, dayP)
-        canvas.drawText(fit(SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time), monthP, headW - (tx - p)), tx, p + capNum, monthP)
+        if (!bare) canvas.drawText(fit(SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time), monthP, headW - (tx - p)), tx, p + capNum, monthP)
         val headBottom = p + capNum
         hits += Hit(RectF(0f, 0f, if (wide) headW + p else s.w, headBottom + 8f * k), Act.Open(intent = Agenda.openDay(c, now)), "Open calendar")
 
@@ -147,7 +150,7 @@ object AgendaPainter : Painter {
         var shown = 0
         var lastDay = -1
         for ((i, o) in events.withIndex()) {
-            val needsLabel = o.day != lastDay
+            val needsLabel = o.day != lastDay && !bare
             val need = (if (needsLabel) labelH + (if (lastDay >= 0) 6f * k else 0f) else 0f) + rowH
             // Leave room for the "more" line unless this is the last event
             val reserve = if (i < events.size - 1) rowH else 0f
@@ -165,7 +168,9 @@ object AgendaPainter : Painter {
                 Paint(Paint.ANTI_ALIAS_FLAG).apply { color = o.colour })
             val tx0 = x0 + 10f * k
             timeP.color = if (o.allDay) s.muted(tx0, mid) else s.ink(tx0, mid)
+            // Without day headings, anything after today names its day instead of its time
             val time = when {
+                bare && o.day != Agenda.dayKey(Calendar.getInstance()) -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(o.begin))
                 o.allDay -> "All day"
                 o.begin <= now -> "Now"
                 else -> fmt.format(java.util.Date(o.begin))
@@ -178,7 +183,7 @@ object AgendaPainter : Painter {
             y += rowH
             shown++
         }
-        if (shown < events.size) {
+        if (shown < events.size && !bare) {
             val moreP = c.ink(10.5f * k, s.muted(x0 + listW / 2, y + 6f * k), 500)
             canvas.textTop("+ ${events.size - shown} more", x0 + 10f * k, y + 2f * k, moreP)
         }

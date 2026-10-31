@@ -28,6 +28,12 @@ object Palette {
 }
 
 object Type {
+    /**
+     * A soft shadow under light ink, set while a glass finish is painted: on clear glass the words
+     * sit over the wallpaper itself, and a shadow is what keeps them legible over its busy parts.
+     */
+    @Volatile var glass = false
+
     private var display: Typeface? = null
     private val jost = HashMap<Int, Typeface>()
 
@@ -52,6 +58,7 @@ fun Context.ink(size: Float, colour: Int, weight: Int = 400, display: Boolean = 
         textSize = size
         color = colour
         letterSpacing = tracking
+        if (Type.glass && lum(colour) > 0.5f) setShadowLayer(size * 0.16f, 0f, size * 0.05f, 0x59000000)
     }
 
 /** [s] cut to [width] with an ellipsis. */

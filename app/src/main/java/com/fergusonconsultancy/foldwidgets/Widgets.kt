@@ -40,7 +40,9 @@ interface Painter {
     fun paint(c: Context, id: Int, canvas: Canvas, s: Surface): Scene
 }
 
-enum class Kind(val painter: Painter) { MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter) }
+enum class Kind(val painter: Painter) {
+    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), STORAGE(StoragePainter)
+}
 
 /**
  * Every widget is one picture drawn at its exact size, so the type, artwork and controls scale with
@@ -66,6 +68,9 @@ class MusicSmall : Widget() { override val kind = Kind.MUSIC }
 class MusicLarge : Widget() { override val kind = Kind.MUSIC }
 class AgendaSmall : Widget() { override val kind = Kind.AGENDA }
 class AgendaLarge : Widget() { override val kind = Kind.AGENDA }
+class MonthSmall : Widget() { override val kind = Kind.MONTH }
+class MonthLarge : Widget() { override val kind = Kind.MONTH }
+class StorageSmall : Widget() { override val kind = Kind.STORAGE }
 class WeatherSmall : Widget() {
     override val kind = Kind.WEATHER
     override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) { super.onUpdate(c, m, ids); RefreshJob.schedule(c) }
@@ -85,6 +90,8 @@ object Widgets {
         Kind.MUSIC to listOf(MusicSmall::class.java, MusicLarge::class.java),
         Kind.AGENDA to listOf(AgendaSmall::class.java, AgendaLarge::class.java),
         Kind.WEATHER to listOf(WeatherSmall::class.java, WeatherLarge::class.java),
+        Kind.MONTH to listOf(MonthSmall::class.java, MonthLarge::class.java),
+        Kind.STORAGE to listOf(StorageSmall::class.java),
     )
 
     /** One worker, so redraws never overlap and never block the main thread. */
@@ -173,7 +180,8 @@ object Widgets {
         val canvas = Canvas(bmp).apply { scale(d, d) }
         val surface = Surface(finish, ground, size.width, size.height, Prefs.radius(c).toFloat().coerceAtMost(minOf(size.width, size.height) / 2f), 1.1f / d)
         surface.paint(canvas)
-        val scene = kind.painter.paint(c, id, canvas, surface)
+        Type.glass = surface.glassy
+        val scene = try { kind.painter.paint(c, id, canvas, surface) } finally { Type.glass = false }
         return bmp to scene
     }
 

@@ -1,0 +1,178 @@
+package com.fergusonconsultancy.foldwidgets
+
+import android.content.ContentUris
+import android.content.Context
+import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.os.Environment
+import android.os.StatFs
+import android.provider.CalendarContract
+import android.provider.Settings
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
+
+/**
+ * The month. Weeks start on Monday. Today is a filled disc in the ink with its number cut out in
+ * the ground's colour; days of the neighbouring months fade back; a day with something in your
+ * calendar carries a small dot in the finish's light. On the large size the month's name heads it
+ * in Italiana. Concentrato: smaller, the weekday initials fall away; smallest, only today is left,
+ * its number in Italiana.
+ */
+object MonthPainter : Painter {
+
+    override fun paint(c: Context, id: Int, canvas: Canvas, s: Surface): Scene {
+        val open = Agenda.openDay(c, System.currentTimeMillis())
+        val scene = Scene(listOf(Hit(RectF(0f, 0f, s.w, s.h), Act.Open(intent = open), "Open calendar")))
+        if (minOf(s.w, s.h) < 105f) { today(c, canvas, s); return scene }
+        val large = s.w >= 220f && s.h >= 220f
+        val k = if (large) minOf(s.w / 256f, s.h / 269f).coerceIn(0.8f, 1.6f) else minOf(s.w / 190f, s.h / 164f).coerceIn(0.62f, 1.5f)
+        val p = (if (large) 18f else 13f) * k
+        val today = Calendar.getInstance()
+        var top = p
+
+        if (large) {
+            val titleP = c.ink(24f * k, s.ink(s.w / 2, p + 10f * k), display = true)
+            canvas.textTop(SimpleDateFormat("MMMM", Locale.getDefault()).format(today.time), p + 2f * k, top, titleP)
+            top += capHeight(titleP) + 14f * k
+        }
+
+        // The weeks this month touches, Monday first
+        val first = (today.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1) }
+        val lead = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7      // days of the previous month shown
+        val days = today.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val rows = (lead + days + 6) / 7
+        val start = (first.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -lead) }
+        val end = (start.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, rows * 7) }
+        val busy = busyDays(c, start.timeInMillis, end.timeInMillis)
+
+        val cw = (s.w - 2 * p) / 7f
+        if (minOf(s.w, s.h) >= 130f) {
+            val headP = c.ink(8.5f * k, s.muted(s.w / 2, top + 4f * k), 500, tracking = 0.1f).apply { textAlign = Paint.Align.CENTER }
+            listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l -> canvas.textTop(l, p + cw * (i + 0.5f), top, headP) }
+            top += capHeight(headP) + 9f * k
+        }
+        val rh = (s.h - p - top) / rows
+        val size = minOf(cw * 0.46f, rh * 0.52f)
+
+        val day = start.clone() as Calendar
+        val todayKey = Agenda.dayKey(today)
+        for (r in 0 until rows) for (col in 0 until 7) {
+            val cx = p + cw * (col + 0.5f)
+            val cy = top + rh * (r + 0.5f)
+            val key = Agenda.dayKey(day)
+            val inMonth = day.get(Calendar.MONTH) == today.get(Calendar.MONTH)
+            val label = day.get(Calendar.DAY_OF_MONTH).toString()
+            val numP = c.ink(size, if (inMonth) s.ink(cx, cy) else (s.ink(cx, cy) and 0x00FFFFFF) or 0x4D000000, 500)
+                .apply { textAlign = Paint.Align.CENTER }
+            if (key == todayKey) {
+                val ink = s.ink(cx, cy)
+                canvas.drawCircle(cx, cy, size * 0.95f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink })
+                // The number in the ground's tone: dark on a light disc, light on a dark one
+                numP.color = if (lum(ink) > 0.5f) 0xFF15191A.toInt() else Palette.IVORY
+                numP.clearShadowLayer()
+            }
+            canvas.drawText(label, cx, cy + capHeight(numP) / 2, numP)
+            if (key in busy && key != todayKey && inMonth) {
+                canvas.drawCircle(cx, cy + size * 0.95f, size * 0.09f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = s.accent(cx, cy) })
+            }
+            day.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return scene
+    }
+
+    /** The vital thing alone: today's number in Italiana, its weekday beneath. */
+    private fun today(c: Context, canvas: Canvas, s: Surface) {
+        val now = Calendar.getInstance()
+        val numP = c.ink(minOf(s.w, s.h) * 0.5f, s.ink(s.w / 2, s.h / 2), display = true).apply { textAlign = Paint.Align.CENTER }
+        val dayP = c.ink(minOf(s.w, s.h) * 0.11f, s.muted(s.w / 2, s.h * 0.8f), 500, tracking = 0.12f).apply { textAlign = Paint.Align.CENTER }
+        val gap = dayP.textSize * 0.9f
+        val block = capHeight(numP) + gap + capHeight(dayP)
+        val top = (s.h - block) / 2f
+        canvas.drawText(now.get(Calendar.DAY_OF_MONTH).toString(), s.w / 2, top + capHeight(numP), numP)
+        canvas.drawText(SimpleDateFormat("EEE", Locale.getDefault()).format(now.time).uppercase(), s.w / 2, top + block, dayP)
+    }
+
+    /** Days between [from] and [to] with at least one event, as day keys. Empty without access. */
+    private fun busyDays(c: Context, from: Long, to: Long): Set<Int> {
+        if (!Agenda.allowed(c)) return emptySet()
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, from - 86_400_000L); ContentUris.appendId(it, to)
+        }.build()
+        val out = HashSet<Int>()
+        val local = Calendar.getInstance()
+        val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        runCatching {
+            c.contentResolver.query(uri, arrayOf(CalendarContract.Instances.BEGIN, CalendarContract.Instances.ALL_DAY),
+                "${CalendarContract.Instances.VISIBLE} = 1", null, null)?.use { cur ->
+                while (cur.moveToNext()) {
+                    val cal = if (cur.getInt(1) == 1) utc else local
+                    cal.timeInMillis = cur.getLong(0)
+                    out += Agenda.dayKey(cal)
+                }
+            }
+        }
+        return out
+    }
+}
+
+/**
+ * Storage. The share used is the one large thing, set in Italiana; around its left side a fan of
+ * fine concentric arcs, each sweeping as far as the share used, so the drawing is the number. What
+ * is free sits beneath. Tapping opens Android's storage settings. Concentrato: smaller, the
+ * title and "used" fall away; smallest, the free space too, leaving the share and its arcs.
+ */
+object StoragePainter : Painter {
+
+    override fun paint(c: Context, id: Int, canvas: Canvas, s: Surface): Scene {
+        val k = (minOf(s.w, s.h) / 164f).coerceIn(0.62f, 1.7f)
+        val stat = StatFs(Environment.getDataDirectory().path)
+        val total = stat.totalBytes.toDouble().coerceAtLeast(1.0)
+        val free = stat.availableBytes.toDouble()
+        val used = (1.0 - free / total).toFloat().coerceIn(0f, 1f)
+        val cx = s.w / 2f
+        val p = 13f * k
+
+        val small = minOf(s.w, s.h)
+        val showTitle = small >= 130f
+        val showFree = small >= 105f
+        val titleP = c.ink(10f * k, s.muted(cx, p + 5f * k), 500, tracking = 0.04f).apply { textAlign = Paint.Align.CENTER }
+        if (showTitle) canvas.textTop("Storage", cx, p, titleP)
+        val freeP = c.ink(11.5f * k, s.ink(cx, s.h - p - 6f * k), 500).apply { textAlign = Paint.Align.CENTER }
+        if (showFree) canvas.drawText("${gb(free)} free", cx, s.h - p, freeP)
+
+        // The arcs, centred in the space between the title and the free line
+        val top = if (showTitle) p + capHeight(titleP) + 8f * k else p
+        val bottom = if (showFree) s.h - p - capHeight(freeP) - 10f * k else s.h - p
+        val cy = (top + bottom) / 2f
+        val outer = minOf((bottom - top) / 2f, s.w * 0.36f)
+        val start = 112f                                   // from lower left, sweeping up and round
+        for (i in 0 until 6) {
+            val r = outer * (1f - i * 0.075f)
+            val oval = RectF(cx - r, cy - r, cx + r, cy + r)
+            canvas.drawArc(oval, 0f, 360f, false, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeWidth = s.hairline * 1.2f; color = (s.ink(cx, cy) and 0x00FFFFFF) or 0x12000000
+            })
+            canvas.drawArc(oval, start, used * 360f, false, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeWidth = maxOf(s.hairline * 1.6f, 0.7f * k); strokeCap = Paint.Cap.ROUND
+                color = (s.ink(cx - r, cy) and 0x00FFFFFF) or ((0xE6 - i * 0x1C) shl 24)
+            })
+        }
+        val pctP = c.ink(outer * 0.62f, s.ink(cx, cy), display = true).apply { textAlign = Paint.Align.CENTER }
+        canvas.drawText("${Math.round(used * 100)}%", cx, cy + capHeight(pctP) * 0.42f, pctP)
+        val usedP = c.ink(9.5f * k, s.muted(cx, cy + outer * 0.4f), 500).apply { textAlign = Paint.Align.CENTER }
+        if (showTitle) canvas.drawText("used", cx, cy + capHeight(pctP) * 0.42f + usedP.textSize * 1.6f, usedP)
+
+        val open = Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)
+        return Scene(listOf(Hit(RectF(0f, 0f, s.w, s.h), Act.Open(intent = open), "Storage settings")))
+    }
+
+    /** Bytes as gigabytes the way the phone counts them: 1 GB is 10^9 bytes. */
+    private fun gb(bytes: Double): String {
+        val g = bytes / 1e9
+        return if (g >= 100) "${Math.round(g)} GB" else String.format(Locale.getDefault(), "%.1f GB", g)
+    }
+}

@@ -111,7 +111,7 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
             val inset = 12f * d
             canvas.save(); canvas.translate(inset, inset); canvas.scale(d, d)
             val sw = (w - 2 * inset) / d; val sh = (h - 2 * inset) / d
-            val s = Surface(f, Ground.of(ground, true), sw, sh, 14f, 1f / d)
+            val s = Surface(f, Ground.of(ground, 0, true), sw, sh, 14f, 1f / d)
             s.paint(canvas)
             val p = context.ink(15f, s.ink(sw * 0.25f, sh * 0.5f), 500)
             canvas.drawText("Aa", 10f, sh / 2 + 5f, p)

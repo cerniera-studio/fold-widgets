@@ -118,5 +118,17 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/weather_large" />
         </receiver>
+        <receiver android:name=".MonthSmall" android:exported="false" android:label="Month">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_small" />
+        </receiver>
+        <receiver android:name=".MonthLarge" android:exported="false" android:label="Month · large">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_large" />
+        </receiver>
+        <receiver android:name=".StorageSmall" android:exported="false" android:label="Storage">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/storage_small" />
+        </receiver>
     </application>
 </manifest>

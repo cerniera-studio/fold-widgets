@@ -12,12 +12,18 @@ import android.graphics.Color
  */
 enum class Finish(val label: String, val fill: Int, val ink: Int, val edge: Int, val indicator: Int, val adaptive: Boolean = false) {
     /**
-     * Vetro (31 Oct 2026): frosted glass. The wallpaper behind the widget, blurred and a touch
-     * richer, under a veil that deepens over dark ground and frosts over light, zone by zone, so the
-     * ink always reads. One highlight along the top edge, falling off towards the corners like light
-     * on a curved pane.
+     * Vetro (31 Oct 2026): frosted glass, tinted by what it sits on. The wallpaper behind the
+     * widget, heavily blurred, under a veil that takes the ground's own colour, deepened over dark
+     * ground (ivory ink) and lifted over light (iron ink), so green wallpaper makes green glass.
+     * A lit bevel all round, strongest at the upper left.
      */
-    VETRO("Vetro glass (adaptive)", 0x66101412, 0xFFF4F1EA.toInt(), 0x33FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
+    VETRO("Vetro frost (adaptive)", 0x66101412, 0xFFF4F1EA.toInt(), 0x33FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
+    /**
+     * Cristallo (31 Oct 2026): clear glass, a slab rather than a veil. The wallpaper behind it barely
+     * softened, bent inwards at the rim as a curved edge bends light, with a faint colour fringe at
+     * the very edge. A light veil only, so the wallpaper stays the subject.
+     */
+    CRISTALLO("Cristallo clear (adaptive)", 0x30101412, 0xFFF4F1EA.toInt(), 0x66FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     SMOKE("Smoked glass (adaptive)", 0xDB121614.toInt(), 0xFFE6E8E2.toInt(), 0x14FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     MEMBRANE("Membrane (adaptive)", 0xC8141816.toInt(), 0xFFEDEAE2.toInt(), 0x1AFFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     ROSSO("Rosso lacquer (adaptive)", 0xF0861018.toInt(), 0xFFF6F1E6.toInt(), 0x40D9BB86, 0xFFD9BB86.toInt(), adaptive = true),
@@ -43,9 +49,12 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
     fun tinted(base: Int, tint: Float, alpha: Int) = (alpha shl 24) or (mixWith(base, tint, 16) shl 16) or (mixWith(base, tint, 8) shl 8) or mixWith(base, tint, 0)
     return when (finish) {
         // Vetro's fill is the veil laid over the blurred wallpaper, not a solid
-        // Over dark ground the glass deepens so ivory reads; over light ground it frosts so iron reads
-        Finish.VETRO -> if (light) Face(tinted(0x0C100E, 0.12f, 0x5C), 0xFFF7F4EE.toInt(), 0x4DFFFFFF, 0xFFE2C48E.toInt())
-            else Face(tinted(0xF6F2EA, 0.08f, 0x96), 0xFF15191A.toInt(), 0x80FFFFFF, 0xFF7A5A28.toInt())
+        // Over dark ground the glass deepens so ivory reads; over light it frosts so iron reads.
+        // Either way it carries a good share of the ground's own colour.
+        Finish.VETRO -> if (light) Face(tinted(0x121614, 0.40f, 0x6E), 0xFFF7F4EE.toInt(), 0x4DFFFFFF, 0xFFE2C48E.toInt())
+            else Face(tinted(0xF6F2EA, 0.32f, 0x9E), 0xFF15191A.toInt(), 0x80FFFFFF, 0xFF7A5A28.toInt())
+        Finish.CRISTALLO -> if (light) Face(tinted(0x0A0D0C, 0.25f, 0x38), 0xFFF7F4EE.toInt(), 0x66FFFFFF, 0xFFE2C48E.toInt())
+            else Face(tinted(0xFFFFFF, 0.20f, 0x47), 0xFF111415.toInt(), 0x80FFFFFF, 0xFF7A5A28.toInt())
         Finish.MEMBRANE -> if (light) Face(tinted(0xF2EEE6, 0.42f, 0xC4), 0xFF141A16.toInt(), 0x26000000, 0xFF7A5A28.toInt())
             else Face(tinted(0x0E1210, 0.45f, 0xB8), 0xFFF4F1EA.toInt(), 0x24FFFFFF, 0xFFE2C48E.toInt())
         Finish.ROSSO -> if (light) Face(tinted(0xB8141E, 0.06f, 0xF0), 0xFFF6F1E6.toInt(), 0x55F6D9A8, 0xFFE9CF9E.toInt())

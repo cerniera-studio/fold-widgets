@@ -155,24 +155,28 @@ object WeatherPainter : Painter {
         val skyX = s.w - p - skyS / 2; val skyY = p + skyS / 2 - 2f * k
         Glyphs.sky(canvas, sky, fc.day, skyX, skyY, skyS, s.ink(skyX, skyY), s.accent(skyX, skyY))
 
+        // Concentrato: when small, only the sky and the temperature stay
+        val bare = minOf(s.w, s.h) < 120f
         // The place and the conditions, top left
         val textW = s.w - 2 * p - skyS - 8f * k
         val placeP = c.ink(13f * k, s.ink(p + textW / 2, p + 6f * k), 500)
-        canvas.textTop(fit(place.name, placeP, textW), p, p, placeP)
-        val wordsP = c.ink(11.5f * k, s.muted(p + textW / 2, p + 24f * k))
-        canvas.textTop(fit(words, wordsP, textW), p, p + placeP.textSize * 1.45f, wordsP)
+        if (!bare) {
+            canvas.textTop(fit(place.name, placeP, textW), p, p, placeP)
+            val wordsP = c.ink(11.5f * k, s.muted(p + textW / 2, p + 24f * k))
+            canvas.textTop(fit(words, wordsP, textW), p, p + placeP.textSize * 1.45f, wordsP)
+        }
 
         // The temperature, the one large thing
         val stripH = if (large && s.h >= 230f) 56f * k else 0f
         val tempP = c.ink((if (large) 84f else 58f) * k, s.ink(p + 40f * k, s.h - p - stripH - 30f * k), display = true)
         val rangeP = c.ink(11.5f * k, s.muted(p + 60f * k, s.h - p - stripH), 500)
         val rangeBase = s.h - p - stripH - (if (stripH > 0) 14f * k else 0f)
-        val tempBase = rangeBase - rangeP.textSize * 1.7f
+        val tempBase = if (bare) s.h - p else rangeBase - rangeP.textSize * 1.7f
         canvas.drawText(Weather.deg(fc.temp), p - 2f * k, tempBase, tempP)
         val stale = (System.currentTimeMillis() - fc.fetched) > 3 * 3_600_000L
         val range = "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}" +
             if (stale) "   ·   ${(System.currentTimeMillis() - fc.fetched) / 3_600_000L}h ago" else ""
-        canvas.drawText(fit(range, rangeP, s.w - 2 * p), p, rangeBase, rangeP)
+        if (!bare) canvas.drawText(fit(range, rangeP, s.w - 2 * p), p, rangeBase, rangeP)
 
         // The hours ahead
         if (stripH > 0 && fc.hours.isNotEmpty()) {

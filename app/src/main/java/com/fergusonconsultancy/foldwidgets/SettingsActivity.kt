@@ -55,7 +55,7 @@ class SettingsActivity : Activity() {
             addView(row("Calendar", "The agenda reads your calendars on the phone",
                 if (cal) status(true) else button("Allow") { requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 1) }))
             val wall = Backdrop.canReadWallpaper()
-            addView(row("Glass", "Vetro frosts your wallpaper. Android only lets an app read the wallpaper with all-files access.",
+            addView(row("Glass", "The glass reads your wallpaper. Android only lets an app read it with all-files access.",
                 if (wall) status(true) else button("Allow") {
                     startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
                 }))
@@ -220,8 +220,11 @@ class SettingsActivity : Activity() {
             "The adaptive finishes read what is behind each widget in a grid of zones, as the taskbar reads the screen: dark over light, " +
             "light over dark, with a trace of the colour beneath. A launcher never tells a widget where it sits, so each one learns it from " +
             "your first tap. Until then it reads the wallpaper's overall colour.\n\n" +
-            "Vetro is real glass: the wallpaper behind the widget, blurred, under a veil that deepens over dark ground and frosts over light, so the words always read. " +
-            "Before its first tap it is clear glass rather than frosted.\n\n" +
+            "The glass is the wallpaper itself, thickened. Cristallo is clear: near its rim it bends in what lies just beyond the edge, " +
+            "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Both carry one highlight at the upper left, " +
+            "cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat.\n\n" +
+            "As a widget gets smaller, things fall away in a fixed order until only the vital thing is left: the play disc, today's date, " +
+            "the temperature, the share of storage used. Skip buttons appear only while something plays.\n\n" +
             "The music widget follows the player Android marks as active. Playing beats paused; among equals, the most recent wins."
     }
 }

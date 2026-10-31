@@ -9,8 +9,6 @@ import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.Shader
 
@@ -48,14 +46,20 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
     /** Whether the ink at a point is dark, i.e. the face there is light. */
     fun darkInk(x: Float, y: Float) = lum(ink(x, y)) < 0.5f
 
-    val shape: Path = Path().apply { addRoundRect(RectF(0f, 0f, w, h), radius, radius, Path.Direction.CW) }
+    val shape: Path = Shapes.squircle(RectF(0f, 0f, w, h), radius)
+
+    val glassy get() = finish == Finish.VETRO || finish == Finish.CRISTALLO
 
     fun paint(c: Canvas) {
         c.save()
         c.clipPath(shape)
-        if (finish == Finish.VETRO) glass(c) else zones(c, Face::fill)
+        when (finish) {
+            Finish.VETRO -> frost(c)
+            Finish.CRISTALLO -> crystal(c)
+            else -> zones(c, Face::fill)
+        }
         c.restore()
-        rim(c)
+        if (glassy) bevel(c) else rim(c)
     }
 
     /** The zones' [part] as a smooth field over the whole widget. */
@@ -75,21 +79,77 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
     }
 
     /**
-     * Vetro. Seated, the blurred wallpaper behind the widget is drawn a touch richer, then veiled.
-     * Not yet seated, there is nothing to draw but the veil, which is translucent, so the real
-     * wallpaper shows through it unblurred: still glass, only clear rather than frosted.
+     * Vetro, frosted. Seated, the wallpaper behind the widget heavily blurred and a touch richer,
+     * under a veil tinted by the ground itself (green glass over a green wallpaper), and a soft
+     * sheen falling from the top where the light enters. Not yet seated, the veil alone, which is
+     * translucent: clear glass rather than frosted.
      */
-    private fun glass(c: Canvas) {
-        ground.picture?.takeIf { ground.seated }?.let { pic ->
-            val rich = ColorMatrix().apply { setSaturation(1.18f) }
+    private fun frost(c: Canvas) {
+        ground.frost?.takeIf { ground.seated }?.let { pic ->
+            val rich = ColorMatrix().apply { setSaturation(1.2f) }
             c.drawBitmap(pic, null, RectF(0f, 0f, w, h), Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(rich) })
         }
         zones(c, Face::fill)
+        sheen(c, 0x1F)
     }
 
     /**
-     * The edge: a hairline in each zone's edge tone, and for glass one highlight along the top
-     * that falls off towards the corners, like light on a curved pane. Never white-hot.
+     * Cristallo, clear. The wallpaper barely softened, seen through a slab whose rim bends in what
+     * lies beyond the edge, under a light veil. Not yet seated it has nothing to bend, so it is the
+     * veil over the real wallpaper.
+     */
+    private fun crystal(c: Canvas) {
+        val clear = ground.clear?.takeIf { ground.seated }
+        if (clear != null) {
+            val innerW = (clear.width - 2 * ground.margin).coerceAtLeast(1)
+            val lens = Lens.refract(clear, ground.margin, radius * 1.3f * innerW / w)
+            c.drawBitmap(lens, null, RectF(0f, 0f, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+        }
+        zones(c, Face::fill)
+        sheen(c, 0x14)
+    }
+
+    /** Light entering the top of the slab, fading by half way down. */
+    private fun sheen(c: Canvas, alpha: Int) {
+        val top = Daylight.light(alpha)
+        c.drawRect(0f, 0f, w, h, Paint().apply {
+            shader = LinearGradient(0f, 0f, 0f, h * 0.5f, top, top and 0x00FFFFFF, Shader.TileMode.CLAMP)
+        })
+    }
+
+    /**
+     * The glass's edge, lit from the upper left as every icon in the family is. One highlight: a
+     * warm line along the rim, strongest at the upper-left corner and gone by the far corner, with
+     * a soft glow inside it where the bevel catches the light. Its colour keeps the time of day.
+     */
+    private fun bevel(c: Canvas) {
+        val st = maxOf(hairline * 1.4f, 0.9f)
+        val inset = st / 2f
+        val rim = Shapes.squircle(RectF(inset, inset, w - inset, h - inset), radius - inset)
+        val diag = { a: Int, b: Int ->
+            LinearGradient(0f, 0f, w, h, intArrayOf(Daylight.light(a), Daylight.light(b), Daylight.light(0), Daylight.light(0)),
+                floatArrayOf(0f, 0.34f, 0.7f, 1f), Shader.TileMode.CLAMP)
+        }
+        // The glow inside the bevel: a broad, blurred stroke, kept inside the glass
+        c.save(); c.clipPath(shape)
+        c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = minOf(w, h) * 0.05f
+            maskFilter = android.graphics.BlurMaskFilter(minOf(w, h) * 0.035f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            shader = diag(0x4D, 0x0F)
+        })
+        c.restore()
+        // The rim itself: lit at the upper left, and where the light has gone, the faintest edge
+        c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = st
+            shader = diag(0xE6, 0x40)
+        })
+        c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = hairline; color = 0x1AFFFFFF
+        })
+    }
+
+    /**
+     * The edge of the solid finishes: a hairline in each zone's edge tone.
      */
     private fun rim(c: Canvas) {
         val stroke = hairline
@@ -101,21 +161,8 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         val shader = BitmapShader(field, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
             setLocalMatrix(Matrix().apply { setScale(w / field.width, h / field.height) })
         }
-        c.drawRoundRect(r, radius - inset, radius - inset, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        c.drawPath(Shapes.squircle(r, radius - inset), Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; strokeWidth = stroke; this.shader = shader
         })
-        if (finish != Finish.VETRO) return
-        // The one highlight: drawn into a layer, then faded at both ends
-        val layer = c.saveLayer(0f, 0f, w, h, null)
-        c.drawRoundRect(r, radius - inset, radius - inset, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE; strokeWidth = stroke * 1.4f
-            this.shader = LinearGradient(0f, 0f, 0f, radius * 1.6f, 0x8CFFF8EC.toInt(), 0x00FFF8EC, Shader.TileMode.CLAMP)
-        })
-        c.drawRect(0f, 0f, w, h, Paint().apply {
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-            shader = LinearGradient(0f, 0f, w, 0f, intArrayOf(0x00000000, 0xFF000000.toInt(), 0xFF000000.toInt(), 0x00000000),
-                floatArrayOf(0f, 0.32f, 0.68f, 1f), Shader.TileMode.CLAMP)
-        })
-        c.restoreToCount(layer)
     }
 }

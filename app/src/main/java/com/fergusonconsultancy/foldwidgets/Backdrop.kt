@@ -133,29 +133,40 @@ object Backdrop {
     fun ground(c: Context, id: Int): Ground {
         val seat = seat(c, id)
         val wall = wallpaper(c, seat)
-        if (seat != null && wall != null) slice(wall, seat)?.let { return Ground.of(it, true) }
+        if (seat != null && wall != null) slice(wall, seat)?.let { return it }
         return Ground.flat(wallpaperColour(c))
     }
 
     /**
-     * The part of [wall] behind [seat]. Launchers scale the wallpaper to fill the screen and centre
-     * it, so the screen sees the middle of the image at that scale.
+     * The part of [wall] behind [seat], with a margin of what lies just beyond each edge: clear
+     * glass bends that in at its rim. Launchers scale the wallpaper to fill the screen and centre
+     * it, so the screen sees the middle of the image at that scale. Beyond the wallpaper's own
+     * edges the outermost pixels repeat.
      */
-    private fun slice(wall: Bitmap, seat: Seat): Bitmap? {
+    private fun slice(wall: Bitmap, seat: Seat): Ground? {
+        if (seat.width < 2f || seat.height < 2f) return null
         val sw = seat.screenW.toFloat(); val sh = seat.screenH.toFloat()
         val scale = maxOf(sw / wall.width, sh / wall.height)
         val ox = (wall.width * scale - sw) / 2f
         val oy = (wall.height * scale - sh) / 2f
-        val src = Rect(
-            ((seat.left + ox) / scale).toInt(), ((seat.top + oy) / scale).toInt(),
-            ((seat.left + seat.width + ox) / scale).toInt(), ((seat.top + seat.height + oy) / scale).toInt())
-        if (!src.intersect(0, 0, wall.width, wall.height) || src.width() < 2 || src.height() < 2) return null
-        // Small on purpose: the glass is a blur, and the zones are averages
-        val w = 96; val h = (96f * seat.height / seat.width).toInt().coerceIn(8, 256)
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(out).drawBitmap(wall, src, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
-        return out
+        val margin = 0.15f * minOf(seat.width, seat.height)     // screen px beyond each edge
+        val s = INNER_WIDTH / seat.width                         // output px per screen px
+        val outW = ((seat.width + 2 * margin) * s).toInt().coerceAtLeast(8)
+        val outH = ((seat.height + 2 * margin) * s).toInt().coerceAtLeast(8)
+        val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        val m = android.graphics.Matrix().apply {
+            setScale(scale * s, scale * s)
+            postTranslate((-ox - (seat.left - margin)) * s, (-oy - (seat.top - margin)) * s)
+        }
+        Canvas(out).drawRect(0f, 0f, outW.toFloat(), outH.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG).apply {
+            shader = android.graphics.BitmapShader(wall, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+                .apply { setLocalMatrix(m) }
+        })
+        return Ground.of(out, (margin * s).toInt(), true)
     }
+
+    /** Width in px of the wallpaper slice behind a widget: sharp enough for clear glass. */
+    private const val INNER_WIDTH = 360f
 
     /** The wallpaper's main colour and whether it is light, which Android gives without asking. */
     private fun wallpaperColour(c: Context): Int {
@@ -172,10 +183,11 @@ object Backdrop {
 }
 
 /**
- * The ground behind a widget: a small picture of it (blurred for glass) and its colour in a grid
- * of zones, [COLS] across and [ROWS] down.
+ * The ground behind a widget, [COLS] zones across and [ROWS] down, with two pictures of it:
+ * [frost], heavily blurred and exactly the widget's area, for Vetro; and [clear], barely softened
+ * and reaching [margin] px beyond every edge, for Cristallo's lens.
  */
-class Ground private constructor(val picture: Bitmap?, val zones: IntArray, val seated: Boolean) {
+class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val margin: Int, val zones: IntArray, val seated: Boolean) {
     /** The zone colour nearest a point given as fractions of the widget's width and height. */
     fun at(fx: Float, fy: Float): Int {
         val x = (fx * COLS).toInt().coerceIn(0, COLS - 1)
@@ -187,12 +199,14 @@ class Ground private constructor(val picture: Bitmap?, val zones: IntArray, val 
         const val COLS = 4
         const val ROWS = 4
 
-        fun flat(colour: Int) = Ground(null, IntArray(COLS * ROWS) { colour }, false)
+        fun flat(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false)
 
-        /** From a picture of the ground: zones are the average of each cell; the picture is blurred. */
-        fun of(picture: Bitmap, seated: Boolean): Ground {
-            val w = picture.width; val h = picture.height
-            val px = IntArray(w * h).also { picture.getPixels(it, 0, w, 0, 0, w, h) }
+        /** From a picture of the ground reaching [margin] px beyond the widget on every side. */
+        fun of(picture: Bitmap, margin: Int = 0, seated: Boolean = true): Ground {
+            val inner = Bitmap.createBitmap(picture, margin, margin,
+                (picture.width - 2 * margin).coerceAtLeast(1), (picture.height - 2 * margin).coerceAtLeast(1))
+            val w = inner.width; val h = inner.height
+            val px = IntArray(w * h).also { inner.getPixels(it, 0, w, 0, 0, w, h) }
             val zones = IntArray(COLS * ROWS) { z ->
                 val cx = z % COLS; val cy = z / COLS
                 val x0 = cx * w / COLS; val x1 = ((cx + 1) * w / COLS).coerceAtLeast(x0 + 1)
@@ -203,7 +217,14 @@ class Ground private constructor(val picture: Bitmap?, val zones: IntArray, val 
                 }
                 if (n == 0) 0xFF2A2F2C.toInt() else Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
             }
-            return Ground(Blur.frost(picture), zones, seated)
+            // Frost: blurred small with its margin, so the blur has real ground at the edges, then cut
+            val f = 96f / w
+            val small = Bitmap.createScaledBitmap(picture, (picture.width * f).toInt().coerceAtLeast(4), (picture.height * f).toInt().coerceAtLeast(4), true)
+            val soft = Blur.frost(small, 5)
+            val fm = (margin * f).toInt()
+            val frost = Bitmap.createBitmap(soft, fm.coerceAtMost(soft.width - 2), fm.coerceAtMost(soft.height - 2),
+                (soft.width - 2 * fm).coerceAtLeast(2), (soft.height - 2 * fm).coerceAtLeast(2))
+            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated)
         }
     }
 }

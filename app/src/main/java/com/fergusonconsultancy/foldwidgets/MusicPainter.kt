@@ -15,11 +15,17 @@ import android.graphics.Shader
  * artwork, the title and artist, and the one colour the artwork lends to the play disc and the
  * progress line. Only the controls the player supports are drawn.
  *
- * Four arrangements, chosen by shape, each scaling continuously with size:
- * - Stack, the small default: artwork and words above, controls below.
+ * Concentrato by size: as the widget shrinks, things fall away in a fixed order until only the
+ * vital thing is left. Album, then the player's name, then the progress line and the artist, then
+ * the title, until only the artwork and the play disc remain.
  * - Poster, the large default: large artwork, the title set in Italiana beside it.
- * - Wide: artwork the full height on the left, everything else beside it.
- * - Tile, when very small: the artwork alone, with play.
+ * - Stack, the small default: artwork and words above, controls below.
+ * - Compact: artwork, title and play.
+ * - Tile: the artwork alone, with play.
+ * - Wide, for long thin shapes: artwork the full height on the left, everything else beside it.
+ *
+ * Disclosure by need: the skip buttons appear only while something plays. Paused or silent, the
+ * one thing to do is play.
  */
 object MusicPainter : Painter {
 
@@ -31,6 +37,7 @@ object MusicPainter : Painter {
             minOf(w, h) < 112f -> tile(c, canvas, s, np)
             w > h * 1.55f -> wide(c, canvas, s, np)
             w >= 220f && h >= 220f -> poster(c, canvas, s, np)
+            minOf(w, h) < 150f -> compact(c, canvas, s, np)
             else -> stack(c, canvas, s, np)
         }
     }
@@ -45,7 +52,7 @@ object MusicPainter : Painter {
         artwork(cv, art, np, s, 10f * k)
         val x0 = art.right + 12f * k
         val tw = s.w - x0 - p
-        eyebrow(c, cv, x0, p + 1f * k, tw, 9.5f * k, np, s)
+        if (tw >= 72f * k) eyebrow(c, cv, x0, p + 1f * k, tw, 9.5f * k, np, s)
         val titleP = c.ink(15f * k, s.ink(x0 + tw / 2, art.bottom - 20f * k), 560)
         val artistP = c.ink(12.5f * k, s.muted(x0 + tw / 2, art.bottom - 4f * k))
         val artistBase = art.bottom - 2f * k
@@ -129,6 +136,26 @@ object MusicPainter : Painter {
         Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, x0 - 4f * k, s.h), it, "Open ${np?.app ?: "player"}")) }
         hits += controls(cv, s, np, first + gap, cy, gap, r, 14f * k)
         return Scene(hits, line)
+    }
+
+    private fun compact(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
+        val k = (minOf(s.w, s.h) / 130f).coerceIn(0.8f, 1.2f)
+        val p = 12f * k
+        val a = minOf(s.h * 0.5f, s.w * 0.44f)
+        val art = RectF(p, p, p + a, p + a)
+        artwork(cv, art, np, s, 9f * k)
+        val r = minOf(s.w, s.h) * 0.17f
+        val cx = s.w - p - r; val cy = s.h - p - r
+        val titleW = s.w - 2 * p - (if (cy - r < art.bottom + 30f * k) 2 * r + 8f * k else 0f)
+        val titleP = c.ink(13.5f * k, s.ink(p + titleW / 2, art.bottom + 16f * k), 560)
+        var y = art.bottom + 10f * k
+        val room = ((s.h - p - y) / (titleP.textSize * 1.2f)).toInt().coerceIn(1, 2)
+        for (line in wrap(titleOf(np), titleP, titleW, room)) { cv.textTop(line, p, y, titleP); y += titleP.textSize * 1.2f }
+        disc(cv, s, np, cx, cy, r, r * 0.78f)
+        val hits = ArrayList<Hit>()
+        Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, s.w, s.h), it, "Open ${np?.app ?: "player"}")) }
+        hits += Hit(RectF(cx - r * 1.3f, cy - r * 1.3f, s.w, s.h), Act.Send(TapReceiver.ACTION_PLAY), if (np?.playing == true) "Pause" else "Play")
+        return Scene(hits)
     }
 
     private fun tile(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
@@ -228,13 +255,14 @@ object MusicPainter : Painter {
         val hits = ArrayList<Hit>()
         val reach = maxOf(r * 1.15f, 22f)
         fun area(x: Float) = RectF(x - reach, cy - reach, x + reach, cy + reach)
-        if (np == null || np.canPrevious) {
+        val playing = np?.playing == true
+        if (playing && np!!.canPrevious) {
             Glyphs.skip(cv, cx - gap, cy, glyph, s.ink(cx - gap, cy), forward = false)
             hits += Hit(area(cx - gap), Act.Send(TapReceiver.ACTION_PREVIOUS), "Previous")
         }
         disc(cv, s, np, cx, cy, r, r * 0.78f)
         hits += Hit(area(cx), Act.Send(TapReceiver.ACTION_PLAY), if (np?.playing == true) "Pause" else "Play")
-        if (np == null || np.canNext) {
+        if (playing && np!!.canNext) {
             Glyphs.skip(cv, cx + gap, cy, glyph, s.ink(cx + gap, cy), forward = true)
             hits += Hit(area(cx + gap), Act.Send(TapReceiver.ACTION_NEXT), "Next")
         }

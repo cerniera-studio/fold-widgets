@@ -4,4 +4,6 @@
     <string name="desc_music">Whatever is playing, from Spotify, Poweramp or any player</string>
     <string name="desc_agenda">The days ahead from your calendars</string>
     <string name="desc_weather">Weather from Open-Meteo</string>
+    <string name="desc_month">The month, today marked, busy days dotted</string>
+    <string name="desc_storage">Storage used and free</string>
 </resources>
