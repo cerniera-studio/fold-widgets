@@ -45,81 +45,81 @@ object MusicPainter : Painter {
     // ---- Arrangements ---------------------------------------------------------------------------
 
     /**
-     * 4x2 and 3x2: the artwork and the words side by side, the line and the disc beneath. Type keeps
-     * one size at every span; the title takes two lines if it needs them and never breaks a word.
+     * 4x2 and 3x2: the artwork and the words side by side, the line and the disc beneath. Every
+     * measure is a multiple of the widget's scale against the 4x2 cover-screen widget, so a larger
+     * widget is the same composition larger, never the same small type floating in space (31 Oct).
      */
     private fun stack(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
-        val p = 14f
-        val r = 21f
-        val a = minOf(s.h - 2 * p - 2 * r - 12f, s.w * 0.40f, 104f)
+        val k = minOf(s.w / 255f, s.h / 164f).coerceIn(0.8f, 2.4f)
+        val p = 14f * k
+        val r = 21f * k
+        val a = minOf(s.h - 2 * p - 2 * r - 12f * k, s.w * 0.40f)
         val art = RectF(p, p, p + a, p + a)
-        artwork(cv, art, np, s, 11f)
-        val x0 = art.right + 12f
+        artwork(cv, art, np, s, 11f * k)
+        val x0 = art.right + 12f * k
         val tw = s.w - x0 - p
-        val (titleP, lines) = c.title(titleOf(np), s.ink(x0 + tw / 2, p + a / 2), tw, 2, listOf(16.5f, 15.5f, 14.5f), 600)
-        val artistP = c.ink(13.5f, s.muted(x0 + tw / 2, art.bottom - 6f), 450)
-        val eyebrowH = 10f * 1.4f + 7f
+        val (titleP, lines) = c.title(titleOf(np), s.ink(x0 + tw / 2, p + a / 2), tw, 2, listOf(16.5f * k, 15.5f * k, 14.5f * k), 600)
+        val artistP = c.ink(13.5f * k, s.muted(x0 + tw / 2, art.bottom - 6f), 450)
+        val eyebrowH = 10f * k * 1.4f + 7f * k
         val titleH = { n: Int -> n * titleP.textSize * 1.18f }
         // Whatever does not fit beside the artwork falls away: the player's name first, then a title line
         var shownLines = lines
-        var showEyebrow = tw >= 72f
-        fun blockH() = (if (showEyebrow) eyebrowH else 0f) + titleH(shownLines.size) + 5f + artistP.textSize * 1.15f
+        var showEyebrow = tw >= 72f * k
+        fun blockH() = (if (showEyebrow) eyebrowH else 0f) + titleH(shownLines.size) + 5f * k + artistP.textSize * 1.15f
         if (blockH() > a) showEyebrow = false
         if (blockH() > a && shownLines.size > 1) shownLines = wrap(titleOf(np), titleP, tw, 1)
-        var y = p + 1f
-        if (showEyebrow) { eyebrow(c, cv, x0, y, tw, 10f, np, s); y += eyebrowH }
+        var y = p + 1f * k
+        if (showEyebrow) { eyebrow(c, cv, x0, y, tw, 10f * k, np, s); y += eyebrowH }
         for (l in shownLines) { cv.textTop(l, x0, y, titleP); y += titleP.textSize * 1.18f }
-        cv.textTop(fit(artistOf(c, np), artistP, tw), x0, y + 5f, artistP)
-        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.6f, 14f)
+        cv.textTop(fit(artistOf(c, np), artistP, tw), x0, y + 5f * k, artistP)
+        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.6f * k, 14f * k)
     }
 
     /**
-     * 4x3 and larger: a poster. The artwork with the player and artist beside it, the title beneath
-     * set across the full width in Italiana, as large as fits in whole words; if Italiana cannot fit
-     * it without cutting, Jost takes over. The line and the disc at the foot.
+     * 4x3 and larger: a poster. The artwork with the player and artist beside it; the title across
+     * the full width, resting on the line and the disc at the foot. One typeface for the title at
+     * every size, Jost, as in every other arrangement: Italiana's hairlines are kept for large
+     * figures, where they hold (31 Oct, after the title broke down on the main screen).
+     * Every measure scales with the widget against the 4x3 cover-screen widget; the artwork takes
+     * whatever height the title and foot leave it.
      */
     private fun poster(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
-        val p = 18f
-        val r = 25f
+        val k = minOf(s.w / 255f, s.h / 267f).coerceIn(0.8f, 2.4f)
+        val p = 18f * k
+        val r = 25f * k
         val footTop = s.h - p - 2 * r
-        val a = minOf((s.w - 2 * p) * 0.45f, s.h * 0.42f, 140f)
+        val base = 20f * k
+        val a = minOf((s.w - 2 * p) * 0.5f, footTop - p - 2 * base * 1.2f - 24f * k).coerceAtLeast(40f * k)
         val art = RectF(p, p, p + a, p + a)
-        artwork(cv, art, np, s, 14f)
-        val x0 = art.right + 14f
+        artwork(cv, art, np, s, 14f * k)
+        val x0 = art.right + 14f * k
         val tw = s.w - x0 - p
-        eyebrow(c, cv, x0, p + 2f, tw, 10f, np, s)
-        var y = p + 2f + 10f * 1.4f + 10f
-        val artistP = c.ink(13.5f, s.muted(x0 + tw / 2, y + 8f), 450)
+        eyebrow(c, cv, x0, p + 2f * k, tw, 10f * k, np, s)
+        var y = p + 2f * k + 10f * k * 1.4f + 10f * k
+        val artistP = c.ink(13.5f * k, s.muted(x0 + tw / 2, y + 8f * k), 450)
         val artistRoom = ((art.bottom - y) / (artistP.textSize * 1.3f)).toInt().coerceIn(0, 3)
         if (artistRoom > 0) for (line in wrap(artistOf(c, np), artistP, tw, artistRoom)) {
             cv.textTop(line, x0, y, artistP); y += artistP.textSize * 1.3f
         }
-        if (np != null && np.album.isNotEmpty() && np.album != np.title && y + 12f * 1.3f < art.bottom) {
-            val albumP = c.ink(12f, s.muted(x0 + tw / 2, y + 12f), 450)
-            cv.textTop(fit(np.album, albumP, tw), x0, y + 3f, albumP)
+        if (np != null && np.album.isNotEmpty() && np.album != np.title && y + 12f * k * 1.3f < art.bottom) {
+            val albumP = c.ink(12f * k, s.muted(x0 + tw / 2, y + 12f * k), 450)
+            cv.textTop(fit(np.album, albumP, tw), x0, y + 3f * k, albumP)
         }
 
-        // The title across the full width, in the room between the artwork and the foot
-        val titleTop = art.bottom + 14f
-        val room = footTop - 10f - titleTop
+        // The title across the full width, set on the foot like a caption
+        val titleTop = art.bottom + 14f * k
+        val bottom = footTop - 12f * k
+        val room = bottom - titleTop
         val width = s.w - 2 * p
-        val colour = s.ink(s.w / 2, titleTop + room / 2)
+        val colour = s.ink(s.w / 2, (titleTop + bottom) / 2)
         val text = titleOf(np)
-        var chosen: Pair<android.text.TextPaint, List<String>>? = null
-        for (size in listOf(28f, 26f, 24f, 22f, 20f)) {
-            val lines = (room / (size * 1.1f)).toInt().coerceIn(1, 3)
-            val tp = c.ink(size, colour, display = true)
-            if (fitsWhole(text, tp, width, lines)) { chosen = tp to wrap(text, tp, width, lines); break }
-        }
-        if (chosen == null) {
-            val lines = (room / (17f * 1.2f)).toInt().coerceIn(1, 3)
-            chosen = c.title(text, colour, width, lines, listOf(17f, 16f, 15f), 600)
-        }
-        val (tp, lines) = chosen
-        val lead = if (tp.typeface == Type.display(c)) 1.1f else 1.2f
-        var ty = titleTop
-        for (l in lines) { cv.textTop(l, p, ty, tp); ty += tp.textSize * lead }
-        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.6f, 18f)
+        val sizes = listOf(22f, 20.5f, 19f, 17.5f, 16f).map { it * k }
+        val most = (room / (sizes.last() * 1.2f)).toInt().coerceIn(1, 3)
+        val (tp, lines) = c.title(text, colour, width, most, sizes, 560)
+        val lead = tp.textSize * 1.2f
+        var ty = bottom - lines.size * lead + (lead - tp.textSize) / 2
+        for (l in lines) { cv.textTop(l, p, ty, tp); ty += lead }
+        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.6f * k, 18f * k)
     }
 
     private fun wide(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
@@ -206,10 +206,14 @@ object MusicPainter : Painter {
     private fun eyebrow(c: Context, cv: Canvas, x: Float, top: Float, width: Float, size: Float, np: NowPlaying?, s: Surface) {
         val pkg = np?.pkg ?: Media.lastPlayer(c) ?: return
         val name = (np?.app ?: Media.label(c, pkg)).uppercase()
-        val icon = np?.icon ?: Media.appIcon(c, pkg)
+        val packed = Icons.of(c, pkg)
+        val icon = if (packed == null) (np?.icon ?: Media.appIcon(c, pkg)) else null
         var tx = x
-        val iconSize = size * 1.35f
-        if (icon != null) {
+        val iconSize = size * 1.5f
+        if (packed != null) {
+            Icons.draw(cv, packed, RectF(x, top + size * 0.5f - iconSize / 2, x + iconSize, top + size * 0.5f + iconSize / 2))
+            tx += iconSize + size * 0.55f
+        } else if (icon != null) {
             val r = RectF(x, top + size * 0.5f - iconSize / 2, x + iconSize, top + size * 0.5f + iconSize / 2)
             cv.save(); cv.clipPath(Path().apply { addOval(r, Path.Direction.CW) })
             cv.drawBitmap(icon, null, r, Paint(Paint.FILTER_BITMAP_FLAG)); cv.restore()

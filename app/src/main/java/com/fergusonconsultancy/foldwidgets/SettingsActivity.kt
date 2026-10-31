@@ -146,6 +146,23 @@ class SettingsActivity : Activity() {
             }
         })
 
+        // ---- Icons: the marks in the widgets come from the home screen's icon pack
+        val packs = Icons.packs(this)
+        if (packs.isNotEmpty()) {
+            column.addView(eyebrow("Icons"))
+            column.addView(card().apply {
+                val inUse = Icons.pack(this@SettingsActivity)
+                addView(label("App icons in the widgets (the mail accounts, the player) are taken from the icon pack you use on the home screen.",
+                    13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
+                (packs.toList() + (null to "Each app's own icon")).forEach { (pkg, name) ->
+                    val on = pkg == inUse
+                    addView(row(name, if (on) "In use" else "", if (on) status(true, "In use") else button("Use", primary = false) {
+                        Icons.setPack(this@SettingsActivity, pkg); build(); Widgets.later { Widgets.renderAll(this@SettingsActivity) }
+                    }))
+                }
+            })
+        }
+
         // ---- Finish
         column.addView(eyebrow("Finish"))
         column.addView(finishGrid(Finish.entries.toList(), { it == Prefs.defaultFinish(this) }) { f ->

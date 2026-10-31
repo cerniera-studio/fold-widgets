@@ -21,7 +21,7 @@ import java.util.concurrent.Executors
 /** What a touch area does. */
 sealed class Act {
     /** Opens something: a pending intent another app gave us (a player's own screen), or an intent. */
-    class Open(val pending: PendingIntent? = null, val intent: Intent? = null) : Act()
+    class Open(val pending: PendingIntent? = null, val intent: Intent? = null, val fallback: Intent? = null) : Act()
     /** Acts in place: play and pause, refresh. */
     class Send(val action: String) : Act()
 }
@@ -87,6 +87,7 @@ object Widgets {
     const val EXTRA_SIZE = "fw.size"
     const val EXTRA_PENDING = "fw.pending"
     const val EXTRA_TARGET = "fw.target"
+    const val EXTRA_FALLBACK = "fw.fallback"
     const val EXTRA_ROOT = "fw.root"
 
     private val providers = mapOf(
@@ -279,6 +280,7 @@ object Widgets {
             is Act.Open -> PendingIntent.getActivity(c, code, Intent(c, TapActivity::class.java).mark().apply {
                 act.pending?.let { putExtra(EXTRA_PENDING, it) }
                 act.intent?.let { putExtra(EXTRA_TARGET, it) }
+                act.fallback?.let { putExtra(EXTRA_FALLBACK, it) }
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }, flags)
             is Act.Send -> PendingIntent.getBroadcast(c, code, Intent(c, TapReceiver::class.java).setAction(act.action).mark(), flags)

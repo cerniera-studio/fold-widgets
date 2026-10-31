@@ -41,7 +41,12 @@ class TapActivity : Activity() {
             if (ok) return
         }
         if (target?.getStringExtra(EXTRA_RESOLVE) == RESOLVE_WEATHER) { weather(); return }
-        if (target != null) startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        // The exact thing first (an email in its app), then the app itself if that cannot be opened
+        @Suppress("DEPRECATION")
+        val fallback = intent.getParcelableExtra<Intent>(Widgets.EXTRA_FALLBACK)
+        for (each in listOfNotNull(target, fallback)) {
+            if (runCatching { startActivity(each.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+        }
     }
 
     /**

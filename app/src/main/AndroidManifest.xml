@@ -31,6 +31,15 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.APP_CALENDAR" />
         </intent>
+        <!-- Icon packs, so app icons in the widgets match the home screen's -->
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <intent><action android:name="com.gau.go.launcherex.theme" /></intent>
+        <!-- Outlook's link to a single email -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="ms-outlook" />
+        </intent>
     </queries>
 
     <application

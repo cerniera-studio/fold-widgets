@@ -18,6 +18,10 @@ class MailItem(
     val account: String, val time: Long, val open: PendingIntent?,
     /** Its notification is still up: not yet opened or cleared in the email app. */
     val fresh: Boolean = true,
+    /** A link straight to this email in its app, when the inbox gives one. */
+    val link: String = "",
+    /** Which inbox it came from: gmail or outlook; empty for notification mail. */
+    val source: String = "",
 ) {
     val id get() = "${sender.lowercase()}|${subject.lowercase()}"
 }
@@ -73,6 +77,9 @@ object Mail {
 
     /** Remembers every email on screen now. Called whenever a chosen app's notifications change. */
     @Synchronized fun remember(c: Context) {
+        // With an inbox connected the notifications are not listed, but their links into each email
+        // are still the surest way in, so they are kept while they live
+        if (Mailbox.connected(c)) { onScreen(c).forEach { m -> m.open?.let { links[m.id] = it } }; return }
         if (!enabled(c)) return
         val now = onScreen(c)
         if (now.isEmpty()) return
@@ -89,7 +96,7 @@ object Mail {
     fun items(c: Context): List<MailItem> {
         // With an inbox connected, the inbox is the truth; notifications only lend their links
         if (Mailbox.connected(c)) {
-            if (enabled(c)) remember(c)
+            remember(c)
             return Mailbox.items(c, links).take(KEEP)
         }
         if (!enabled(c)) return emptyList()
@@ -149,15 +156,15 @@ object Mail {
 }
 
 /**
- * The mail widget, in the agenda's family: the count of what is waiting in Italiana, then each
- * email as a sender in the ink and its time, the subject beneath, and from four rows tall a line of
- * its opening. A short bar in front marks the account, so two accounts combined stay legible:
- * the colour is information, not ornament. Type keeps one size at every span (4x3 to 5x4).
+ * The mail widget, in the agenda's family. The count of unread mail in Italiana and the word
+ * "Unread"; nothing else in the header unless something is wrong (31 Oct: "2 accounts" told Mechack
+ * what he already knows, and a section label repeating the heading was clutter). Each email: the
+ * account's own app icon, taken from the icon pack on the home screen so it is the mark he knows,
+ * then sender and time, subject, and from four rows tall a line of the opening. Unread is bright,
+ * read is muted with its icon faded, under a quiet READ divider. Type keeps one size at every span.
+ * A tap opens that email itself, never just the inbox, wherever the app allows it.
  */
 object MailPainter : Painter {
-
-    /** Account colours from the family: champagne, sage, rosso, steel. */
-    private val ACCOUNT = intArrayOf(0xFFD9BB86.toInt(), 0xFF8FB58A.toInt(), 0xFFD0505A.toInt(), 0xFF8AA4C8.toInt())
 
     override fun paint(c: Context, id: Int, canvas: Canvas, s: Surface): Scene {
         val hits = ArrayList<Hit>()
@@ -172,7 +179,7 @@ object MailPainter : Painter {
             val titleP = c.ink(24f, s.ink(s.w / 2, s.h / 2), display = true)
             canvas.textTop("Mail", p, p, titleP)
             val noteP = c.ink(13f, s.muted(s.w / 2, s.h / 2), 450)
-            wrap("Tap to show new mail from Outlook and Gmail here", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
+            wrap("Tap to connect Gmail and Outlook", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
                 canvas.textTop(l, p, p + capHeight(titleP) + 14f + i * noteP.textSize * 1.3f, noteP)
             }
             hits[0] = Hit(RectF(0f, 0f, s.w, s.h), Act.Open(intent = Intent(c, SettingsActivity::class.java)), "Set up mail")
@@ -180,43 +187,33 @@ object MailPainter : Painter {
         }
 
         val items = Mail.items(c)
-        val accounts = items.map { it.account }.filter { it.isNotEmpty() }.distinct()
         val fresh = items.count { it.fresh }
+        val warning = if (boxes) Mailbox.warning(c) else null
 
-        // The count of what is new is the one large thing, shown only when there is some: a zero in
-        // Italiana reads as a letter, and the widget cannot know the inbox is empty anyway
-        val tx: Float
-        val capNum: Float
+        // Header: the count and one word. A second line only to say something is wrong, or all is read
+        val numP = c.ink(if (tall) 42f else if (bare) 26f else 34f, s.ink(p + 20f, p + 18f), display = true)
+        val capNum = capHeight(numP)
+        var tx = p
         if (fresh > 0) {
-            val numP = c.ink(if (tall) 42f else if (bare) 26f else 34f, s.ink(p + 20f, p + 18f), display = true)
             canvas.textTop(fresh.toString(), p, p, numP)
-            capNum = capHeight(numP)
             tx = p + numP.measureText(fresh.toString()) + 10f
-        } else {
-            capNum = capHeight(c.ink(if (tall) 42f else if (bare) 26f else 34f, 0, display = true))
-            tx = p
         }
         val headW = s.w - p - tx
-        val inboxP = c.ink(if (bare) 13f else 15f, s.ink(tx + 30f, p + 6f), 600)
-        val subP = c.ink(13f, s.muted(tx + 30f, p + capNum), 450)
+        val headP = c.ink(if (bare) 13f else 15f, s.ink(tx + 30f, p + 6f), 600)
         val heading = when {
             boxes -> if (fresh > 0) "Unread" else "Inbox"
             fresh == 1 -> "New email"; fresh > 1 -> "New emails"; else -> "Recent mail"
         }
-        if (bare) canvas.drawText(fit(heading, inboxP, headW), tx, p + capNum, inboxP)
-        else {
-            canvas.textTop(fit(heading, inboxP, headW), tx, p + 1f, inboxP)
-            val warning = if (boxes) Mailbox.warning(c) else null
-            if (warning != null) subP.color = s.accent(tx + 30f, p + capNum)
-            val sub = when {
-                warning != null -> warning
-                accounts.size > 1 -> "${accounts.size} accounts"
-                accounts.size == 1 -> accounts[0]
-                else -> Mail.apps(c).filter { Mail.installed(c, it) }.mapNotNull { Mail.APPS[it] }.joinToString(" · ")
-            }
-            canvas.drawText(fit(sub, subP, headW), tx, p + capNum, subP)
+        val second = warning ?: if (boxes && fresh == 0 && items.isNotEmpty()) "All read" else null
+        if (second == null || bare) {
+            // One line, centred on the figures
+            canvas.drawText(fit(heading, headP, headW), tx, p + capNum / 2 + capHeight(headP) / 2, headP)
+        } else {
+            val subP = c.ink(13f, if (warning != null) s.accent(tx + 30f, p + capNum) else s.muted(tx + 30f, p + capNum), 450)
+            canvas.textTop(fit(heading, headP, headW), tx, p + 1f, headP)
+            canvas.drawText(fit(second, subP, headW), tx, p + capNum, subP)
         }
-        var y = p + capNum + (if (bare) 12f else 18f)
+        var y = p + capNum + (if (bare) 12f else 20f)
 
         if (items.isEmpty()) {
             val emptyP = c.ink(22f, s.ink(s.w / 2, y + 12f), display = true)
@@ -234,31 +231,31 @@ object MailPainter : Painter {
         val previewP = c.ink(12.5f, s.muted(s.w / 2, y), 450)
         val rowH = if (bare) 22f else if (tall) 62f else 44f
         val gap = if (bare) 4f else 10f
-        val x0 = p + 11f
+        val icon = if (bare) 0f else 18f
+        val x0 = p + (if (bare) 0f else icon + 11f)
         val width = s.w - p - x0
+        val labelP = c.ink(11f, s.muted(s.w / 2, y), 600, tracking = 0.16f)
         var shown = 0
-        // New and earlier mail under their own headings, so which is which is never in doubt
-        val labelP = c.ink(11.5f, s.accent(s.w / 2, y), 600, tracking = 0.14f)
-        var section: Boolean? = null
+        var dividerDone = false
         for ((i, m) in items.withIndex()) {
-            // A row without a preview line is shorter, so no gap is left where it would have been
             val thisRow = if (tall && m.preview.isEmpty()) 44f else rowH
             val reserve = if (i < items.size - 1 && !bare) 18f else 0f
-            val heading = !bare && section != m.fresh
-            val headingH = if (heading) 20f + (if (section != null) 6f else 0f) else 0f
-            if (y + headingH + thisRow + reserve > s.h - p + 2f) break
-            if (heading) {
-                if (section != null) y += 6f
-                labelP.color = if (m.fresh) s.accent(s.w / 2, y) else s.muted(s.w / 2, y)
-                canvas.textTop(if (m.fresh) (if (boxes) "UNREAD" else "NEW") else (if (boxes) "READ" else "EARLIER"), p, y, labelP)
-                y += 20f
-                section = m.fresh
+            // A quiet divider where read mail begins, only when unread mail sits above it
+            val divider = !bare && !m.fresh && !dividerDone && fresh > 0
+            val dividerH = if (divider) 26f else 0f
+            if (y + dividerH + thisRow + reserve > s.h - p + 2f) break
+            if (divider) {
+                labelP.color = s.muted(s.w / 2, y + 10f)
+                canvas.textTop(if (boxes) "READ" else "EARLIER", x0, y + 4f, labelP)
+                y += dividerH
             }
+            if (!m.fresh) dividerDone = true
             val mid = y + 9f
-            // New mail bright; mail already opened or cleared in the app dims but stays
-            val accent = ACCOUNT[(accounts.indexOf(m.account).coerceAtLeast(0)) % ACCOUNT.size]
-            val bar = if (m.fresh) accent else (accent and 0x00FFFFFF) or 0x59000000
-            canvas.drawRoundRect(RectF(p, y + 1f, p + 3f, y + thisRow - gap - 1f), 1.5f, 1.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bar })
+
+            // The account's mark: its app's icon, as on the home screen; faded once read
+            if (!bare) appFor(c, m)?.let { pkg ->
+                Icons.of(c, pkg)?.let { d -> Icons.draw(canvas, d, RectF(p, mid - icon / 2, p + icon, mid + icon / 2), if (m.fresh) 255 else 115) }
+            }
             val time = when (val d = m.time) {
                 in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
                 else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))
@@ -277,10 +274,7 @@ object MailPainter : Painter {
                     canvas.drawText(fit(m.preview, previewP, width), x0, mid + 37f + capHeight(previewP) / 2, previewP)
                 }
             }
-            // The email itself while its link is live; otherwise its app
-            val app = c.packageManager.getLaunchIntentForPackage(m.pkg)
-            val open = if (m.open != null) Act.Open(pending = m.open, intent = app) else if (app != null) Act.Open(intent = app) else inbox
-            if (open != null && hits.size < 12) hits += Hit(RectF(0f, y - 3f, s.w, y + thisRow - gap + 3f), open, "${m.sender}: ${m.subject}")
+            open(c, m, inbox)?.let { if (hits.size < 12) hits += Hit(RectF(0f, y - 3f, s.w, y + thisRow - gap + 3f), it, "${m.sender}: ${m.subject}") }
             y += thisRow
             shown++
         }
@@ -290,6 +284,30 @@ object MailPainter : Painter {
         }
         return Scene(hits)
     }
+
+    /** The app whose icon marks the email's account. */
+    private fun appFor(c: Context, m: MailItem): String? = when (m.source) {
+        Mailbox.GMAIL -> GMAIL_APP.takeIf { Mail.installed(c, it) } ?: m.pkg
+        Mailbox.OUTLOOK -> OUTLOOK_APP
+        else -> m.pkg
+    }.takeIf { it.isNotEmpty() }
+
+    /**
+     * Opening one email: the link its app gave in the notification while that lives (it opens the
+     * exact email wherever it was announced), else the inbox's own link to the message (Outlook's
+     * message link, Gmail's conversation link), and only if both fail, the app.
+     */
+    private fun open(c: Context, m: MailItem, inbox: Act?): Act? {
+        val app = c.packageManager.getLaunchIntentForPackage(m.pkg)
+        val deep = m.link.takeIf { it.isNotEmpty() }?.let {
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it)).setPackage(if (m.source == Mailbox.GMAIL) GMAIL_APP else OUTLOOK_APP)
+        }
+        if (m.open == null && deep == null) return app?.let { Act.Open(intent = it) } ?: inbox
+        return Act.Open(pending = m.open, intent = deep ?: app, fallback = if (deep != null) app else null)
+    }
+
+    private const val GMAIL_APP = "com.google.android.gm"
+    private const val OUTLOOK_APP = "com.microsoft.office.outlook"
 
     private fun startOfToday() = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)

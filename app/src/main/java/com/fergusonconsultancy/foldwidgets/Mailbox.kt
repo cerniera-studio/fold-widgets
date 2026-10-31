@@ -190,7 +190,7 @@ object Mailbox {
         val arr = JSONArray()
         items.forEach {
             arr.put(JSONObject().put("k", it.key).put("s", it.sender).put("j", it.subject).put("v", it.preview)
-                .put("a", it.account).put("t", it.time).put("u", it.fresh))
+                .put("a", it.account).put("t", it.time).put("u", it.fresh).put("l", it.link))
         }
         Prefs.of(c).edit().putString("mb_cache_$kind", arr.toString()).putLong("mb_synced_$kind", System.currentTimeMillis()).apply()
     }
@@ -205,7 +205,7 @@ object Mailbox {
                     val o = arr.getJSONObject(i)
                     val sender = o.optString("s"); val subject = o.optString("j")
                     MailItem(o.optString("k"), pkg, sender, subject, o.optString("v"), o.optString("a"), o.optLong("t"),
-                        links["${sender.lowercase()}|${subject.lowercase()}"], o.optBoolean("u"))
+                        links["${sender.lowercase()}|${subject.lowercase()}"], o.optBoolean("u"), o.optString("l"), kind)
                 }
             }.getOrDefault(emptyList())
         }.sortedByDescending { it.time }
@@ -263,8 +263,10 @@ object Gmail {
             inbox.fetch(msgs, FetchProfile().apply {
                 add(FetchProfile.Item.ENVELOPE); add(FetchProfile.Item.FLAGS); add(UIDFolder.FetchProfileItem.UID)
             })
+            val threads = threads(inbox, chosen)
             val items = msgs.reversed().mapIndexed { i, m ->
                 val uid = inbox.getUID(m)
+                val thread = threads[m.messageNumber]
                 val key = "g$uid"
                 val from = m.from?.firstOrNull() as? InternetAddress
                 val sender = from?.personal?.takeIf { it.isNotBlank() } ?: from?.address.orEmpty()
@@ -272,7 +274,9 @@ object Gmail {
                 val preview = previews[key] ?: if (i < 12) runCatching { Mailbox.opening(text(m).orEmpty()) }.getOrDefault("").also { previews[key] = it } else ""
                 MailItem(key, "", sender, m.subject.orEmpty().trim(), preview, address,
                     (m.receivedDate ?: m.sentDate)?.time ?: 0L, null,
-                    fresh = !m.flags.contains(javax.mail.Flags.Flag.SEEN))
+                    fresh = !m.flags.contains(javax.mail.Flags.Flag.SEEN),
+                    link = thread?.let { "https://mail.google.com/mail/u/${Uri.encode(address)}/#inbox/" + java.lang.Long.toHexString(it) }.orEmpty(),
+                    source = Mailbox.GMAIL)
             }
             inbox.close(false)
             return items
@@ -291,6 +295,14 @@ object Gmail {
         if (lines.isEmpty()) return@runCatching null
         lines.flatMap { line -> line.removePrefix("SEARCH").trim().split(' ').mapNotNull { it.trim().toIntOrNull() } }
     }.getOrNull()
+
+    /** Gmail's conversation id for each message number: what its web and app links are built from. */
+    private fun threads(inbox: IMAPFolder, numbers: List<Int>): Map<Int, Long> = runCatching {
+        @Suppress("UNCHECKED_CAST")
+        val replies = inbox.doCommand(IMAPFolder.ProtocolCommand { p -> p.command("FETCH ${numbers.joinToString(",")} (X-GM-THRID)", null) }) as Array<Response>
+        val re = Regex("^(?:\\*\\s+)?(\\d+)\\s+FETCH.*X-GM-THRID\\s+(\\d+)")
+        replies.mapNotNull { r -> re.find(r.toString().trim())?.let { it.groupValues[1].toInt() to it.groupValues[2].toLong() } }.toMap()
+    }.getOrDefault(emptyMap())
 
     /** The plain text of a message, or its HTML if it has no plain part. */
     private fun text(p: Part, depth: Int = 0): String? {
@@ -382,10 +394,14 @@ object Microsoft {
             .map { o ->
                 val from = o.optJSONObject("from")?.optJSONObject("emailAddress")
                 val sender = from?.optString("name")?.takeIf { it.isNotBlank() } ?: from?.optString("address").orEmpty()
-                MailItem("o" + o.optString("id").takeLast(24), "", sender, o.optString("subject").trim(),
+                val id = o.optString("id")
+                MailItem("o" + id.takeLast(24), "", sender, o.optString("subject").trim(),
                     Mailbox.opening(o.optString("bodyPreview")), addr,
                     runCatching { java.time.Instant.parse(o.optString("receivedDateTime")).toEpochMilli() }.getOrDefault(0L), null,
-                    fresh = !o.optBoolean("isRead", true))
+                    fresh = !o.optBoolean("isRead", true),
+                    // Outlook's own link to one message (the form Microsoft To Do uses to open an email)
+                    link = "ms-outlook://emails/message/open?restID=${Uri.encode(id)}&account=${Uri.encode(addr)}",
+                    source = Mailbox.OUTLOOK)
             }
     }
 

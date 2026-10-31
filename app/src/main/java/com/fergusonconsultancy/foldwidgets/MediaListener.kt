@@ -96,7 +96,7 @@ class MediaListener : android.service.notification.NotificationListenerService()
     private fun mailSoon() { main.removeCallbacks(mailRedraw); main.postDelayed(mailRedraw, 400) }
 
     private fun isMail(sbn: android.service.notification.StatusBarNotification?) =
-        sbn != null && Mail.enabled(this) && sbn.packageName in Mail.apps(this)
+        sbn != null && (Mail.enabled(this) || Mailbox.connected(this)) && sbn.packageName in Mail.apps(this)
 
     /** An email app's notifications changed: something arrived, or was dealt with in the app. */
     private fun mailboxNudge(sbn: android.service.notification.StatusBarNotification?) {
