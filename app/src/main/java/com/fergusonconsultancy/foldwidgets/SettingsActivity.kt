@@ -136,6 +136,12 @@ class SettingsActivity : Activity() {
 
             if (gmail != null || outlook != null) {
                 // Googlemail link test (1 Nov): does Outlook accept Gmail's own ids for a Gmail email?
+                if (gmail != null && Probe.gmailSample(this@SettingsActivity) == null) addView(row("Googlemail link test",
+                    "Waiting for Gmail's ids for your newest email. Tap Refresh, then come back to this screen." +
+                        (Prefs.of(this@SettingsActivity).getString("gmail_ids_error", null)?.let { "\n$it" } ?: ""),
+                    button("Refresh", primary = false) {
+                        Thread { Mailbox.sync(applicationContext, force = true); runOnUiThread { build() } }.start()
+                    }))
                 Probe.gmailSample(this@SettingsActivity)?.let { sample ->
                     addView(label("Googlemail link test. Each button asks Outlook to open this email: \"${sample.subject}\". Tell Claude which numbers open the email itself, which open an inbox, and which fail.",
                         13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })

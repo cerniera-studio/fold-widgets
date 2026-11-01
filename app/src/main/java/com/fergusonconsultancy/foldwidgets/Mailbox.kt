@@ -242,15 +242,19 @@ object Gmail {
 
     fun fetch(c: Context, address: String, password: String, primaryOnly: Boolean): List<MailItem> {
         val props = Properties().apply {
-            put("mail.imaps.host", "imap.gmail.com")
-            put("mail.imaps.port", "993")
-            put("mail.imaps.ssl.checkserveridentity", "true")
-            put("mail.imaps.connectiontimeout", "15000")
-            put("mail.imaps.timeout", "20000")
-            // Read bodies with PEEK: looking at an email must never mark it read
-            put("mail.imaps.peek", "true")
+            // The library's Gmail mode reads Gmail's own message and thread ids (1 Nov: asked for
+            // the generic way, the library rejected them and no ids arrived)
+            for (proto in listOf("imaps", "gimaps")) {
+                put("mail.$proto.host", "imap.gmail.com")
+                put("mail.$proto.port", "993")
+                put("mail.$proto.ssl.checkserveridentity", "true")
+                put("mail.$proto.connectiontimeout", "15000")
+                put("mail.$proto.timeout", "20000")
+                // Read bodies with PEEK: looking at an email must never mark it read
+                put("mail.$proto.peek", "true")
+            }
         }
-        val store = Session.getInstance(props).getStore("imaps")
+        val store = com.sun.mail.gimap.GmailSSLStore(Session.getInstance(props), null)
         store.connect("imap.gmail.com", 993, address, password)
         try {
             val inbox = store.getFolder("INBOX") as IMAPFolder
@@ -265,10 +269,12 @@ object Gmail {
             inbox.fetch(msgs, FetchProfile().apply {
                 add(FetchProfile.Item.ENVELOPE); add(FetchProfile.Item.FLAGS); add(UIDFolder.FetchProfileItem.UID)
             })
-            val gids = gmailIds(inbox, chosen)
+            runCatching { inbox.fetch(msgs, FetchProfile().apply {
+                add(com.sun.mail.gimap.GmailFolder.FetchProfileItem.MSGID); add(com.sun.mail.gimap.GmailFolder.FetchProfileItem.THRID)
+            }) }.onFailure { Prefs.of(c).edit().putString("gmail_ids_error", it.toString()).apply() }
             val items = msgs.reversed().mapIndexed { i, m ->
                 val uid = inbox.getUID(m)
-                val g = gids[m.messageNumber]
+                val g = (m as? com.sun.mail.gimap.GmailMessage)?.let { gm -> runCatching { gm.msgId to gm.thrId }.getOrNull() }
                 val header = runCatching { (m as javax.mail.internet.MimeMessage).messageID }.getOrNull().orEmpty()
                 val key = "g$uid"
                 val from = m.from?.firstOrNull() as? InternetAddress
@@ -301,20 +307,6 @@ object Gmail {
     }.getOrNull()
 
     /** Gmail's conversation id for each message number: what its web and app links are built from. */
-    private fun gmailIds(inbox: IMAPFolder, numbers: List<Int>): Map<Int, Pair<Long, Long>> = runCatching {
-        @Suppress("UNCHECKED_CAST")
-        val replies = inbox.doCommand(IMAPFolder.ProtocolCommand { p -> p.command("FETCH ${numbers.joinToString(",")} (X-GM-MSGID X-GM-THRID)", null) }) as Array<Response>
-        val num = Regex("^(?:\\*\\s+)?(\\d+)\\s+FETCH")
-        val msg = Regex("X-GM-MSGID\\s+(\\d+)")
-        val thr = Regex("X-GM-THRID\\s+(\\d+)")
-        replies.mapNotNull { r ->
-            val t = r.toString().trim()
-            val n = num.find(t)?.groupValues?.get(1)?.toInt() ?: return@mapNotNull null
-            val m = msg.find(t)?.groupValues?.get(1)?.toLong() ?: return@mapNotNull null
-            n to (m to (thr.find(t)?.groupValues?.get(1)?.toLong() ?: 0L))
-        }.toMap()
-    }.getOrDefault(emptyMap())
-
     /** The plain text of a message, or its HTML if it has no plain part. */
     private fun text(p: Part, depth: Int = 0): String? {
         if (depth > 5) return null
