@@ -206,7 +206,7 @@ object Mailbox {
                     val o = arr.getJSONObject(i)
                     val sender = o.optString("s"); val subject = o.optString("j")
                     MailItem(o.optString("k"), pkg, sender, subject, o.optString("v"), o.optString("a"), o.optLong("t"),
-                        Mail.linkFor(sender, subject), o.optBoolean("u"), o.optString("l"), kind, o.optString("i"))
+                        Mail.linkFor(sender, subject, o.optLong("t")), o.optBoolean("u"), o.optString("l"), kind, o.optString("i"))
                 }
             }.getOrDefault(emptyList())
         }.sortedByDescending { it.time }

@@ -72,34 +72,77 @@ object Mail {
 
     private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
 
-    private fun keep(c: Context, m: MailItem) {
+    /**
+     * A link kept from a notification, with everything the notification said (normalised) and
+     * when the email arrived. 1 Nov: Outlook's notification for a Googlemail email never words
+     * sender and subject exactly as Gmail does, so an exact match found nothing (three links kept,
+     * none matched). Now an email is paired with a notification by time first, confirmed by its
+     * subject or sender appearing anywhere in what the notification said.
+     */
+    private class Kept(val open: PendingIntent, val said: String, val time: Long)
+    private val kept = java.util.concurrent.CopyOnWriteArrayList<Kept>()
+
+    private fun keep(c: Context, m: MailItem, said: String = "") {
         val open = m.open ?: return
         val fresh = !links.containsKey(m.id)
         links[m.id] = open
         if (m.subject.length >= 4) bySubject[norm(m.subject)] = open
-        if (fresh) Probe.note(c, "Kept a link from ${APPS[m.pkg] ?: m.pkg}'s notification (now ${links.size})", null)
+        if (fresh) {
+            kept += Kept(open, norm("$said ${m.sender} ${m.subject} ${m.preview}"), m.time)
+            while (kept.size > 120) kept.removeAt(0)
+            Probe.note(c, "Kept a link from ${APPS[m.pkg] ?: m.pkg}'s notification (now ${links.size})", null)
+        }
     }
 
     fun keptCount() = links.size
 
     /** Outlook's own link into an email it announced, kept from its notification: opens that email for either account. */
-    fun linkFor(sender: String, subject: String): PendingIntent? =
-        links["${sender.lowercase()}|${subject.lowercase()}"] ?: bySubject[norm(subject)]
+    fun linkFor(sender: String, subject: String, time: Long = 0L): PendingIntent? {
+        links["${sender.lowercase()}|${subject.lowercase()}"]?.let { return it }
+        bySubject[norm(subject)]?.let { return it }
+        if (time <= 0L) return null
+        val subj = norm(subject); val from = norm(sender)
+        // Words of the subject long enough to be telling, for a partial match
+        val words = subject.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 4 }
+        val near = kept.filter { Math.abs(it.time - time) <= 20 * 60_000L }
+        val scored = near.map { k ->
+            var score = 0
+            if (subj.length >= 4 && k.said.contains(subj)) score += 3
+            else if (words.isNotEmpty() && words.count { k.said.contains(it) } * 2 >= words.size) score += 2
+            if (from.length >= 3 && k.said.contains(from)) score += 2
+            k to score
+        }.filter { it.second >= 2 }
+        val best = scored.maxWithOrNull(compareBy<Pair<Kept, Int>>({ it.second }, { -Math.abs(it.first.time - time) })) ?: return null
+        return best.first.open
+    }
+
+    /** Everything a notification says, as one string: title, text, long text, lines and messages. */
+    private fun said(sbn: StatusBarNotification): String {
+        val e = sbn.notification.extras
+        val parts = ArrayList<String>()
+        for (k in e.keySet()) when (val v = e.get(k)) {
+            is CharSequence -> parts += v.toString()
+            is Array<*> -> v.forEach { x -> if (x is CharSequence) parts += x.toString() else if (x is android.os.Bundle) x.getCharSequence("text")?.let { parts += it.toString() } }
+        }
+        return parts.joinToString(" ")
+    }
 
     /** The emails announced right now by the chosen apps. */
-    private fun onScreen(c: Context): List<MailItem> {
+    private fun onScreen(c: Context): List<MailItem> = onScreenSaid(c).map { it.first }
+
+    private fun onScreenSaid(c: Context): List<Pair<MailItem, String>> {
         val listener = MediaListener.instance ?: return emptyList()
         val chosen = apps(c)
         val all = runCatching { listener.activeNotifications.toList() }.getOrDefault(emptyList())
         return all.filter { it.packageName in chosen && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
-            .mapNotNull { read(it) }
+            .mapNotNull { sbn -> read(sbn)?.let { it to said(sbn) } }
     }
 
     /** Remembers every email on screen now. Called whenever a chosen app's notifications change. */
     @Synchronized fun remember(c: Context) {
         // With an inbox connected the notifications are not listed, but their links into each email
         // are still the surest way in, so they are kept while they live
-        if (Mailbox.connected(c)) { onScreen(c).forEach { keep(c, it) }; return }
+        if (Mailbox.connected(c)) { onScreenSaid(c).forEach { (m, s) -> keep(c, m, s) }; return }
         if (!enabled(c)) return
         val now = onScreen(c)
         if (now.isEmpty()) return
