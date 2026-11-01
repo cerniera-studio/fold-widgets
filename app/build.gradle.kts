@@ -55,4 +55,6 @@ dependencies {
     // Gmail over IMAP (Jakarta Mail's Android build)
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+    // Gmail mode (Gmail's own message and thread ids); its other dependencies come from android-mail above
+    implementation("com.sun.mail:gimap:1.6.7") { isTransitive = false }
 }
