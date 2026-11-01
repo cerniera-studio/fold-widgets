@@ -222,7 +222,7 @@ object Mail {
  * The mail widget, in the agenda's family. The count of unread mail in Italiana and the word
  * "Unread"; nothing else in the header unless something is wrong (31 Oct: "2 accounts" told Mechack
  * what he already knows, and a section label repeating the heading was clutter). Each email: the
- * account's own app icon, taken from the icon pack on the home screen so it is the mark he knows,
+ * sender and time, subject, and from four rows tall a line of the opening; no account mark (1 Nov).
  * then sender and time, subject, and from four rows tall a line of the opening. Unread is bright,
  * read is muted with its icon faded, under a quiet READ divider. Type keeps one size at every span.
  * A tap opens that email itself, never just the inbox, wherever the app allows it.
@@ -335,7 +335,6 @@ object MailPainter : Painter {
             if (!m.fresh) dividerDone = true
             val mid = y + 9f
 
-            // The account's mark: its app's icon, as on the home screen; faded once read
             val time = when (val d = m.time) {
                 in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
                 else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))
