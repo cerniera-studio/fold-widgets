@@ -154,6 +154,10 @@ object AgendaPainter : Painter {
             return Scene(hits)
         }
 
+        // The days ahead scroll (1 Nov), as the mail list does: the date stays in the picture, and
+        // each day heading and event is a row of its own in a scrolling list laid over the glass
+        if (!bare) return Scene(hits, listTop = y - 4f)
+
         var shown = 0
         var lastDay = -1
         for ((i, o) in events.withIndex()) {
@@ -204,6 +208,52 @@ object AgendaPainter : Painter {
             canvas.textTop("+ ${events.size - shown} more", x0 + 11f, y + 2f, moreP)
         }
         return Scene(hits)
+    }
+
+    /** The measures the scrolling list shares with the widget. */
+    class RowStyle(val x0: Float, val tall: Boolean, val timeW: Float) {
+        val labelH = 11f + 9f
+        fun height(o: Occurrence?, first: Boolean) = if (o == null) labelH + (if (first) 0f else 9f) else if (o.allDay) 27f else if (tall) 40f else 27f
+    }
+
+    fun rowStyle(c: Context, s: Surface): RowStyle {
+        val wide = s.w > s.h * 1.55f && s.w >= 240f
+        val p = if (minOf(s.w, s.h) >= 220f) 18f else 15f
+        val fmt = android.text.format.DateFormat.getTimeFormat(c)
+        val widest = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 22); set(Calendar.MINUTE, 58) }
+        val timeW = c.ink(14.5f, 0, 600).measureText(fmt.format(widest.time)) + 8f
+        return RowStyle(if (wide) s.w * 0.34f + 8f else p, s.h >= 330f, timeW)
+    }
+
+    /** A day heading row: TODAY, TOMORROW, MON 2 NOV. */
+    fun paintDay(c: Context, cv: Canvas, s: Surface, st: RowStyle, day: Int, first: Boolean, sampleY: Float) {
+        val labelP = c.label(s.accent(s.w / 2, sampleY))
+        cv.textTop(dayName(day), st.x0, if (first) 0f else 9f, labelP)
+    }
+
+    /** One event as a row of the scrolling list, [width] dp wide. */
+    fun paintEvent(c: Context, cv: Canvas, s: Surface, st: RowStyle, o: Occurrence, width: Float, sampleY: Float) {
+        val p = if (minOf(s.w, s.h) >= 220f) 18f else 15f
+        val now = System.currentTimeMillis()
+        val fmt = android.text.format.DateFormat.getTimeFormat(c)
+        val firstMid = 9f
+        val detailed = st.tall && !o.allDay
+        cv.drawRoundRect(RectF(st.x0, 1f, st.x0 + 3f, if (detailed) 32f else 17f), 1.5f, 1.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = o.colour })
+        val tx0 = st.x0 + 11f
+        val time = when { o.allDay -> ""; o.begin <= now -> "Now"; else -> fmt.format(java.util.Date(o.begin)) }
+        val titleX = if (time.isEmpty()) tx0 else tx0 + st.timeW
+        if (time.isNotEmpty()) {
+            val timeP = c.ink(14.5f, s.ink(tx0, sampleY), 600)
+            cv.drawText(fit(time, timeP, st.timeW), tx0, firstMid + capHeight(timeP) / 2, timeP)
+        }
+        val titleP = c.ink(14.5f, s.ink(titleX + 30f, sampleY), 450)
+        cv.drawText(fit(o.title, titleP, width - p - titleX), titleX, firstMid + capHeight(titleP) / 2, titleP)
+        if (detailed) {
+            val range = fmt.format(java.util.Date(o.begin)) + " – " + fmt.format(java.util.Date(o.end))
+            val detail = if (o.location.isNotEmpty()) "$range  ·  ${o.location}" else range
+            val detailP = c.meta(s.muted(titleX + 30f, sampleY))
+            cv.drawText(fit(detail, detailP, width - p - titleX), titleX, firstMid + 17f + capHeight(detailP) / 2, detailP)
+        }
     }
 
     /** TODAY, TOMORROW, then MON 2 NOV. */

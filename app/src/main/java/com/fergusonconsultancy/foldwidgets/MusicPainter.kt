@@ -34,12 +34,13 @@ object MusicPainter : Painter {
         val np = Media.now(c)
         val w = s.w; val h = s.h
         return when {
-            minOf(w, h) < 112f -> tile(c, canvas, s, np)
+            w >= 90f && w < 220f && h >= w * 1.3f -> slim(c, canvas, s, np)
+            minOf(w, h) < 90f -> tile(c, canvas, s, np)
             w > h * 2f -> wide(c, canvas, s, np)
             w >= 220f && h >= 220f && h >= w * 1.3f -> portrait(c, canvas, s, np)
             w >= 220f && h >= 220f && w >= h * 1.35f -> landscape(c, canvas, s, np)
             w >= 220f && h >= 220f -> poster(c, canvas, s, np)
-            minOf(w, h) < 150f -> compact(c, canvas, s, np)
+            minOf(w, h) < 150f || (w < 170f && h < 220f) -> cover(c, canvas, s, np)
             else -> stack(c, canvas, s, np)       // 4x2 and 3x2 on the cover screen
         }
     }
@@ -245,6 +246,71 @@ object MusicPainter : Painter {
         Media.openAct(c, np)?.let { hits.add(Hit(RectF(0f, 0f, s.w, s.h), it, "Open ${np?.app ?: "player"}")) }
         hits += Hit(RectF(cx - r * 1.3f, cy - r * 1.3f, s.w, s.h), Act.Send(TapReceiver.ACTION_PLAY), if (np?.playing == true) "Pause" else "Play")
         return Scene(hits)
+    }
+
+    /**
+     * Small and square (2x2, 1 Nov): the artwork is the widget, edge to edge; the title sits on a
+     * soft shade at its foot, the disc in the corner. The flagship's signature, nothing else.
+     */
+    private fun cover(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
+        val full = RectF(0f, 0f, s.w, s.h)
+        val k = (minOf(s.w, s.h) / 150f).coerceIn(0.8f, 1.3f)
+        val art = np?.art
+        cv.save(); cv.clipPath(s.shape)
+        if (art != null) cv.drawBitmap(art, null, cover(art, full), Paint(Paint.FILTER_BITMAP_FLAG))
+        else Glyphs.record(cv, full, s.ink(s.w / 2, s.h / 2))
+        cv.drawRect(full, Paint().apply {
+            shader = LinearGradient(0f, s.h * 0.3f, 0f, s.h, 0x00000000, 0xB3000000.toInt(), Shader.TileMode.CLAMP)
+        })
+        cv.restore()
+        val p = 12f * k
+        val r = (minOf(s.w, s.h) * 0.16f).coerceIn(16f, 26f)
+        val cx = s.w - p - r; val cy = s.h - p - r
+        disc(cv, s, np, cx, cy, r, r * 0.78f)
+        val tw = cx - r - 8f * k - p
+        val titleP = c.ink(13.5f * k, Palette.IVORY, 600)
+        val lines = wrap(titleOf(np), titleP, tw, 2)
+        var y = s.h - p - lines.size * titleP.textSize * 1.18f + (titleP.textSize * 1.18f - capHeight(titleP)) / 2
+        for (l in lines) { cv.textTop(l, p, y, titleP); y += titleP.textSize * 1.18f }
+        val hits = ArrayList<Hit>()
+        Media.openAct(c, np)?.let { hits.add(Hit(full, it, "Open ${np?.app ?: "player"}")) }
+        hits += Hit(RectF(cx - r * 1.4f, cy - r * 1.4f, s.w, s.h), Act.Send(TapReceiver.ACTION_PLAY), if (np?.playing == true) "Pause" else "Play")
+        return Scene(hits)
+    }
+
+    /**
+     * Narrow and tall (two columns, three or more rows): the portrait in miniature. The artwork
+     * across the width, the title and artist beneath, the line and the disc at the foot.
+     */
+    private fun slim(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {
+        val k = (s.w / 150f).coerceIn(0.75f, 1.4f)
+        val p = 12f * k
+        val r = 18f * k
+        val width = s.w - 2 * p
+        val footTop = s.h - p - 2 * r
+        val artistP = c.meta(s.muted(s.w / 2, s.h * 0.7f), k, 12f)
+        val colour = s.ink(s.w / 2, s.h * 0.65f)
+        val text = titleOf(np)
+        fun block(size: Float, n: Int) = n * size * 1.2f + 4f * k + artistP.textSize * 1.2f
+        var a = width
+        val room = footTop - 10f * k - (p + a + 10f * k)
+        var chosen: Pair<android.text.TextPaint, List<String>>? = null
+        for (size in listOf(18f, 17f, 16f, 15f, 14f, 13f).map { it * k }) {
+            val tp = c.ink(size, colour, 600)
+            if (fitsWhole(text, tp, width, 3)) { val l = wrap(text, tp, width, 3); if (block(size, l.size) <= room) { chosen = tp to l; break } }
+        }
+        if (chosen == null) {
+            chosen = c.title(text, colour, width, 2, listOf(13f * k), 600)
+            a = minOf(width, footTop - 10f * k - p - 10f * k - block(chosen.first.textSize, chosen.second.size)).coerceAtLeast(36f * k)
+        }
+        val (tp, lines) = chosen
+        val art = RectF(p + (width - a) / 2, p, p + (width - a) / 2 + a, p + a)
+        artwork(cv, art, np, s, 10f * k)
+        val roomTop = art.bottom + 10f * k; val roomBottom = footTop - 10f * k
+        var y = roomTop + ((roomBottom - roomTop) - block(tp.textSize, lines.size)).coerceAtLeast(0f) / 2f
+        for (l in lines) { cv.textTop(l, p, y + (tp.textSize * 0.2f) / 2, tp); y += tp.textSize * 1.2f }
+        cv.textTop(fit(artistOf(c, np), artistP, width), p, y + 4f * k, artistP)
+        return foot(c, cv, s, np, p, s.w - p, s.h - p - r, r, 1.4f * k, 10f * k)
     }
 
     private fun tile(c: Context, cv: Canvas, s: Surface, np: NowPlaying?): Scene {

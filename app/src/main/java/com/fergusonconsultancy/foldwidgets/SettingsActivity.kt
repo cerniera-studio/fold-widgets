@@ -386,7 +386,7 @@ class ConfigureActivity : Activity() {
         val (scroll, column) = screen()
         column.addView(label("This widget", 32f, Palette.IVORY, display = true))
         Widgets.kindOf(this, id)?.let { k -> column.addView(label(Widgets.describe(this, id, k), 14f, Palette.CHAMPAGNE, 500).apply { setPadding(0, px(6), 0, 0) }) }
-        column.addView(label("Its finish and what it shows. Default follows the choice in Fold Widgets.", 14f, Palette.MUTED).apply { setPadding(0, px(8), 0, 0) })
+        column.addView(label("Its finish and what it shows. Follow app keeps this widget in the finish chosen for the whole app.", 14f, Palette.MUTED).apply { setPadding(0, px(8), 0, 0) })
         column.addView(eyebrow("Finish"))
         column.addView(finishGrid(listOf<Finish?>(null) + Finish.entries,
             { f -> if (f == null) !Prefs.hasOwnFinish(this, id) else Prefs.hasOwnFinish(this, id) && Prefs.finish(this, id) == f }) { f ->

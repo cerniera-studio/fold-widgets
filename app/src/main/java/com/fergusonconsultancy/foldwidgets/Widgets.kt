@@ -202,7 +202,7 @@ object Widgets {
         if (listed) {
             // A scrolling list of rows over the picture, filled by MailRows, each row its own picture
             place(rv, R.id.list, RectF(0f, scene.listTop, size.width, size.height - 6f))
-            rv.setRemoteAdapter(R.id.list, Intent(c, MailRows::class.java)
+            rv.setRemoteAdapter(R.id.list, Intent(c, if (kind == Kind.AGENDA) AgendaRows::class.java else MailRows::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse("foldwidgets://rows/$id")))
             rv.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(c, id * 32 + 31,
                 Intent(c, TapActivity::class.java).setData(Uri.parse("foldwidgets://row/$id"))

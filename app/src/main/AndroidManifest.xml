@@ -122,6 +122,11 @@
 
         <!-- The mail widget's scrolling list: rows handed to the launcher one at a time -->
         <service
+            android:name=".AgendaRows"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <service
             android:name=".MailRows"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />

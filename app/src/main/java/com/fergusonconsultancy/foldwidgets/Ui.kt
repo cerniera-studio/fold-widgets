@@ -98,12 +98,19 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
         override fun onDraw(canvas: Canvas) {
             val w = width.toFloat(); val h = height.toFloat()
             if (w <= 0f) return
-            // The ground: warm stone fading to a dark photograph-like green
-            val ground = Bitmap.createBitmap(48, 40, Bitmap.Config.ARGB_8888).also {
-                Canvas(it).drawRect(0f, 0f, 48f, 40f, Paint().apply {
-                    shader = LinearGradient(0f, 0f, 48f, 40f, intArrayOf(0xFFEDE6D8.toInt(), 0xFFC9B79A.toInt(), 0xFF2B3A2F.toInt(), 0xFF101613.toInt()),
+            // The ground: warm stone fading to a dark photograph-like green, crossed by fine diagonal
+            // bands (1 Nov). On a smooth ground frost and clear glass looked identical; over detail,
+            // Vetro visibly softens it and Cristallo shows it sharp, as on the home screen
+            val ground = Bitmap.createBitmap(192, 160, Bitmap.Config.ARGB_8888).also {
+                val g = Canvas(it)
+                g.drawRect(0f, 0f, 192f, 160f, Paint().apply {
+                    shader = LinearGradient(0f, 0f, 192f, 160f, intArrayOf(0xFFEDE6D8.toInt(), 0xFFC9B79A.toInt(), 0xFF2B3A2F.toInt(), 0xFF101613.toInt()),
                         floatArrayOf(0f, 0.42f, 0.58f, 1f), Shader.TileMode.CLAMP)
                 })
+                val band = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 3f; color = 0x4D000000 }
+                val light = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 2f; color = 0x40FFFFFF }
+                var x = -160f
+                while (x < 192f) { g.drawLine(x, 160f, x + 160f, 0f, band); g.drawLine(x + 7f, 160f, x + 167f, 0f, light); x += 16f }
             }
             canvas.drawBitmap(ground, null, RectF(0f, 0f, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
             val f = finish ?: Prefs.defaultFinish(context)
@@ -131,9 +138,13 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
     init {
         orientation = VERTICAL
         addView(picture, LayoutParams(-1, c.px(84)))
-        addView(c.label(finish?.short ?: "Default · ${Prefs.defaultFinish(c).short}", 12.5f, if (chosen) Palette.CHAMPAGNE else Palette.MUTED, 500).apply {
+        // The first tile is not a finish of its own: it follows the finish chosen for the whole
+        // app, so this widget changes when that does. Named for what it does (1 Nov: "Default ·
+        // Ceramica" read as a second Ceramica)
+        addView(c.label(finish?.short ?: "Follow app", 12.5f, if (chosen) Palette.CHAMPAGNE else Palette.MUTED, 500).apply {
             setPadding(c.px(2), c.px(8), 0, 0)
         })
+        if (finish == null) addView(c.label("Now ${Prefs.defaultFinish(c).short}", 11f, Palette.MUTED, 400).apply { setPadding(c.px(2), c.px(2), 0, 0) })
         setOnClickListener { onPick(finish) }
     }
 }

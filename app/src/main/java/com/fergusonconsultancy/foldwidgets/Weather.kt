@@ -326,6 +326,7 @@ object WeatherPainter : Painter {
                        fillTo: Float?, on: (WeatherOptions.Item) -> Boolean): Float {
         val (words, sky) = Weather.describe(fc.code)
         val w = right - left
+        if (w < 150f) return narrow(c, cv, s, fc, place, p, left, right, words, sky, on)
         val tiny = minOf(s.w, s.h) < 120f
         val g = (minOf(w, s.h) * 0.24f).coerceIn(26f, 64f)
         val gx = right - g / 2; val gy = p + g / 2 - 2f
@@ -354,6 +355,44 @@ object WeatherPainter : Painter {
             cv.drawText(fit(parts.joinToString("   ·   "), lineP, w), left, base + 10f + capHeight(lineP) + 4f, lineP)
         }
         return if (tiny) -1f else topBlock + 14f + capT + 10f + lineH
+    }
+
+    /**
+     * Two columns wide (1 Nov: the sky beside the place left the name no room, and the temperature
+     * ran off the foot). The words take the full width, place then conditions; the temperature
+     * beneath, as large as the room allows, with the sky beside it. Every size keeps the minimum:
+     * place, temperature, conditions. Returns where it ends, so a tall one can add the week.
+     */
+    private fun narrow(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, left: Float, right: Float,
+                       words: String, sky: Glyphs.Sky, on: (WeatherOptions.Item) -> Boolean): Float {
+        val w = right - left
+        val placeP = c.ink(if (w < 100f) 12.5f else 14f, s.ink(left + w / 2, p + 6f), 600)
+        val wordsP = c.meta(s.muted(left + w / 2, p + 24f), 1f, if (w < 100f) 11.5f else 12.5f)
+        cv.textTop(fit(place.name, placeP, w), left, p, placeP)
+        cv.textTop(fit(words, wordsP, w), left, p + placeP.textSize * 1.35f, wordsP)
+        val top = p + placeP.textSize * 1.35f + wordsP.textSize * 1.3f + 6f
+        val bottom = s.h - p
+        val showRange = on(WeatherOptions.Item.RANGE) && bottom - top >= 80f
+        val lineH = if (showRange) 20f else 0f
+        val g = (w * 0.28f).coerceIn(20f, 34f)
+        // The temperature fills what is left, never past the foot
+        var size = minOf(w * 0.5f, (bottom - top - lineH) * 0.9f, if (s.h >= 230f) 64f else 56f).coerceAtLeast(18f)
+        var tempP = c.ink(size, s.ink(left + w * 0.3f, top + size / 2), display = true)
+        while (capHeight(tempP) + 4f > bottom - top - lineH && size > 18f) { size -= 2f; tempP = c.ink(size, tempP.color, display = true) }
+        val capT = capHeight(tempP)
+        val base = top + 4f + capT
+        cv.drawText(Weather.deg(fc.temp), left - 1f, base, tempP)
+        val tw = tempP.measureText(Weather.deg(fc.temp))
+        if (tw + g + 6f <= w) {
+            val gx = right - g / 2; val gy = base - capT / 2
+            Glyphs.sky(cv, sky, fc.day, gx, gy, g, s.ink(gx, gy), s.accent(gx, gy))
+        }
+        if (showRange) {
+            val lineP = c.meta(s.muted(left + w / 2, base + 14f), 1f, 12f)
+            cv.drawText(fit("H ${Weather.deg(fc.high)}  L ${Weather.deg(fc.low)}", lineP, w), left, base + 8f + capHeight(lineP), lineP)
+        }
+        val end = base + lineH + 10f
+        return if (bottom - end >= 3 * 26f + 14f) end else -1f
     }
 
     private enum class Module { HOURS, WEEK, DETAILS }
