@@ -42,7 +42,19 @@ interface Painter {
 }
 
 enum class Kind(val painter: Painter) {
-    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), MAIL(MailPainter)
+    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), MAIL(MailPainter);
+
+    /**
+     * How much larger a list widget's whole composition is drawn (1 Nov). Agenda and mail keep one
+     * type scale on the cover screen, where a larger widget shows more rows; on the main screen
+     * widgets are two to three times the size, and the same small type sat in wide empty margins.
+     * So from 300 dp in both directions the composition grows with the widget, up to half as large
+     * again. Music, weather and month scale within their own layouts.
+     */
+    fun scaleFor(w: Float, h: Float): Float = when (this) {
+        AGENDA, MAIL -> minOf(w / 300f, h / 300f).coerceIn(1f, 1.5f)
+        else -> 1f
+    }
 }
 
 /**
@@ -273,7 +285,15 @@ object Widgets {
         val canvas = Canvas(bmp).apply { scale(d, d) }
         val surface = Surface(finish, ground, size.width, size.height, Prefs.radius(c).toFloat().coerceAtMost(minOf(size.width, size.height) / 2f), 1.1f / d)
         surface.paint(canvas)
-        val scene = kind.painter.paint(c, id, canvas, surface)
+        val k = kind.scaleFor(size.width, size.height)
+        if (k == 1f) return bmp to kind.painter.paint(c, id, canvas, surface)
+        canvas.save(); canvas.scale(k, k)
+        val inner = kind.painter.paint(c, id, canvas, surface.scaled(k))
+        canvas.restore()
+        fun RectF.up() = RectF(left * k, top * k, right * k, bottom * k)
+        val scene = Scene(inner.hits.map { Hit(it.rect.up(), it.act, it.label) },
+            inner.line?.let { Line(it.rect.up(), it.value, it.track, it.fill) },
+            if (inner.listTop >= 0f) inner.listTop * k else -1f)
         return bmp to scene
     }
 

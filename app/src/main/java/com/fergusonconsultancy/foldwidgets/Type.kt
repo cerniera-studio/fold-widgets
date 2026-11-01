@@ -57,6 +57,26 @@ fun Context.ink(size: Float, colour: Int, weight: Int = 400, display: Boolean = 
         isLinearText = false
     }
 
+/**
+ * The pack's type, defined once (1 Nov: the same roles had drifted into five label styles, and
+ * Italiana had crept onto words). Two faces, each with one job:
+ * - Italiana: the one large figure a widget is about (the date, the unread count, the temperature).
+ *   Never words: its hairlines only hold at figure sizes.
+ * - Jost: every word. Heading 15 at 600; primary line 14.5 at 600 (unread) or 500 (read);
+ *   body 14 at 450; meta 12.5 at 450, muted; label 11 at 600, capitals tracked 0.14.
+ * Widgets that scale (music, month) multiply these by their scale; lists keep them fixed.
+ */
+fun Context.heading(colour: Int, k: Float = 1f, size: Float = 15f) = ink(size * k, colour, 600)
+
+/** The quiet title of an empty or setup state: a heading, a step larger. */
+fun Context.statement(colour: Int, k: Float = 1f) = ink(17f * k, colour, 600)
+
+/** Secondary text (times, artist, a line of an email's opening): 12.5 at 500, set in the muted ink. */
+fun Context.meta(colour: Int, k: Float = 1f, size: Float = 12.5f) = ink(size * k, colour, 500)
+
+/** Small tracked capitals: day headings, section dividers, the player's name, detail labels. */
+fun Context.label(colour: Int, k: Float = 1f, size: Float = 11f) = ink(size * k, colour, 600, tracking = 0.14f)
+
 /** [s] cut to [width] with an ellipsis. */
 fun fit(s: CharSequence, p: TextPaint, width: Float): String =
     TextUtils.ellipsize(s, p, width.coerceAtLeast(1f), TextUtils.TruncateAt.END).toString()

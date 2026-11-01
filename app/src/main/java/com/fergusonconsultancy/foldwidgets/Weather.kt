@@ -244,7 +244,7 @@ object WeatherPainter : Painter {
         val p = if (minOf(s.w, s.h) >= 220f) 18f else if (minOf(s.w, s.h) >= 120f) 14f else 10f
 
         if (place == null || fc == null) {
-            val titleP = c.ink(22f, s.ink(s.w / 2, s.h / 2), display = true)
+            val titleP = c.statement(s.ink(s.w / 2, s.h / 2))
             canvas.textTop("Weather", p, p, titleP)
             val noteP = c.ink(12.5f, s.muted(s.w / 2, s.h / 2), 450)
             val note = if (place == null) "Tap to choose a place" else "Fetching ${place.name}…"
@@ -270,7 +270,7 @@ object WeatherPainter : Painter {
         var x = p + tempP.measureText(temp) + 14f
         // Place, conditions and the range, stacked beside the temperature
         val placeP = c.ink(14.5f, s.ink(x + 40f, s.h / 2 - 12f), 600)
-        val wordsP = c.ink(12.5f, s.muted(x + 40f, s.h / 2 + 6f), 450)
+        val wordsP = c.meta(s.muted(x + 40f, s.h / 2 + 6f))
         val rangeP = c.ink(11.5f, s.muted(x + 40f, s.h / 2 + 20f), 500)
         val showRange = on(WeatherOptions.Item.RANGE) && s.h >= 100f
         val lines = if (showRange) 3 else 2
@@ -350,7 +350,7 @@ object WeatherPainter : Painter {
             val parts = ArrayList<String>()
             if (showRange) parts += "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}"
             if (showFeels) parts += "Feels like ${Weather.deg(fc.feels!!)}"
-            val lineP = c.ink(12.5f, s.muted(left + 60f, base + 14f), 500)
+            val lineP = c.meta(s.muted(left + 60f, base + 14f))
             cv.drawText(fit(parts.joinToString("   ·   "), lineP, w), left, base + 10f + capHeight(lineP) + 4f, lineP)
         }
         return if (tiny) -1f else topBlock + 14f + capT + 10f + lineH
@@ -404,7 +404,7 @@ object WeatherPainter : Painter {
                 Module.WEEK -> { week(c, cv, s, fc, left, y, right, rows); y += rows * 26f }
                 Module.DETAILS -> {
                     val colW = w / cols
-                    val labelP = c.ink(10f, s.muted(left + w / 2, y), 500, tracking = 0.12f)
+                    val labelP = c.label(s.muted(left + w / 2, y), 1f, 10.5f)
                     val valueP = c.ink(15f, s.ink(left + w / 2, y), 600)
                     for ((k, t) in tiles.take(rows * cols).withIndex()) {
                         val x = left + colW * (k % cols); val ty = y + 46f * (k / cols)

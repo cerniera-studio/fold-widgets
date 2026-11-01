@@ -48,6 +48,9 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
 
     val shape: Path = Shapes.squircle(RectF(0f, 0f, w, h), radius)
 
+    /** The same glass measured in units [k] times larger: for content drawn on a canvas scaled by [k]. */
+    fun scaled(k: Float) = if (k == 1f) this else Surface(finish, ground, w / k, h / k, radius / k, hairline / k)
+
     val glassy get() = finish == Finish.VETRO || finish == Finish.CRISTALLO
 
     fun paint(c: Canvas) {

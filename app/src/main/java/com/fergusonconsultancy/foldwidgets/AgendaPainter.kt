@@ -114,7 +114,7 @@ object AgendaPainter : Painter {
         val tx = p + numW + 10f
         val headW = (if (wide) s.w * 0.34f else s.w - p) - tx
         val dayP = c.ink(if (bare) 13f else 15f, s.ink(tx + 30f, p + 6f), 600)
-        val monthP = c.ink(13f, s.muted(tx + 30f, p + capNum), 450)
+        val monthP = c.meta(s.muted(tx + 30f, p + capNum), 1f, 13f)
         if (bare) canvas.drawText(fit(SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.time), dayP, headW), tx, p + capNum, dayP)
         else {
             canvas.textTop(fit(SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.time), dayP, headW), tx, p + 1f, dayP)
@@ -134,20 +134,20 @@ object AgendaPainter : Painter {
         var y = if (wide) p + 2f else headBottom + (if (bare) 12f else 18f)
         val listW = s.w - x0 - p
         val events = Agenda.ahead(c)
-        val labelP = c.ink(11.5f, s.accent(x0 + listW / 2, y), 600, tracking = 0.14f)
-        val timeP = c.ink(14f, s.ink(x0 + 30f, y), 600)
+        val labelP = c.label(s.accent(x0 + listW / 2, y))
+        val timeP = c.ink(14.5f, s.ink(x0 + 30f, y), 600)
         val titleP = c.ink(14.5f, s.ink(x0 + listW / 2, y), 450)
-        val detailP = c.ink(12.5f, s.muted(x0 + listW / 2, y), 450)
+        val detailP = c.meta(s.muted(x0 + listW / 2, y))
         val fmt = android.text.format.DateFormat.getTimeFormat(c)
         val widest = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 22); set(Calendar.MINUTE, 58) }
         val timeW = timeP.measureText(fmt.format(widest.time)) + 8f
         val rowH = if (tall) 40f else 27f
-        val labelH = 11.5f + 8.5f
+        val labelH = 11f + 9f
         val bottom = s.h - p
         val todayKey = Agenda.dayKey(Calendar.getInstance())
 
         if (events.isEmpty()) {
-            val emptyP = c.ink(22f, s.ink(x0 + listW / 2, y + 12f), display = true)
+            val emptyP = c.statement(s.ink(x0 + listW / 2, y + 12f))
             canvas.textTop("Nothing ahead", x0, y + 4f, emptyP)
             val noteP = c.ink(13f, s.muted(x0 + listW / 2, y + 34f), 450)
             canvas.textTop("Two clear weeks", x0, y + 4f + emptyP.textSize * 1.3f, noteP)
@@ -200,7 +200,7 @@ object AgendaPainter : Painter {
             shown++
         }
         if (shown < events.size && !bare) {
-            val moreP = c.ink(12.5f, s.muted(x0 + listW / 2, y + 6f), 500)
+            val moreP = c.meta(s.muted(x0 + listW / 2, y + 6f))
             canvas.textTop("+ ${events.size - shown} more", x0 + 11f, y + 2f, moreP)
         }
         return Scene(hits)

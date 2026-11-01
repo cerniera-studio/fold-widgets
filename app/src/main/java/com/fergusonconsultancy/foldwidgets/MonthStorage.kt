@@ -35,7 +35,7 @@ object MonthPainter : Painter {
         var top = p
 
         if (large) {
-            val titleP = c.ink(24f * k, s.ink(s.w / 2, p + 10f * k), display = true)
+            val titleP = c.heading(s.ink(s.w / 2, p + 10f * k), k, 17f)
             canvas.textTop(SimpleDateFormat("MMMM", Locale.getDefault()).format(today.time), p + 2f * k, top, titleP)
             top += capHeight(titleP) + 14f * k
         }
@@ -51,7 +51,7 @@ object MonthPainter : Painter {
 
         val cw = (s.w - 2 * p) / 7f
         if (minOf(s.w, s.h) >= 130f) {
-            val headP = c.ink(8.5f * k, s.muted(s.w / 2, top + 4f * k), 500, tracking = 0.1f).apply { textAlign = Paint.Align.CENTER }
+            val headP = c.label(s.muted(s.w / 2, top + 4f * k), k, 9.5f).apply { textAlign = Paint.Align.CENTER }
             listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l -> canvas.textTop(l, p + cw * (i + 0.5f), top, headP) }
             top += capHeight(headP) + 9f * k
         }
@@ -88,7 +88,7 @@ object MonthPainter : Painter {
     private fun today(c: Context, canvas: Canvas, s: Surface) {
         val now = Calendar.getInstance()
         val numP = c.ink(minOf(s.w, s.h) * 0.5f, s.ink(s.w / 2, s.h / 2), display = true).apply { textAlign = Paint.Align.CENTER }
-        val dayP = c.ink(minOf(s.w, s.h) * 0.11f, s.muted(s.w / 2, s.h * 0.8f), 500, tracking = 0.12f).apply { textAlign = Paint.Align.CENTER }
+        val dayP = c.ink(minOf(s.w, s.h) * 0.11f, s.muted(s.w / 2, s.h * 0.8f), 600, tracking = 0.14f).apply { textAlign = Paint.Align.CENTER }
         val gap = dayP.textSize * 0.9f
         val block = capHeight(numP) + gap + capHeight(dayP)
         val top = (s.h - block) / 2f

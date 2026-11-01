@@ -238,7 +238,7 @@ object MailPainter : Painter {
 
         val boxes = Mailbox.connected(c)
         if (!boxes && (!Mail.enabled(c) || !Media.allowed(c))) {
-            val titleP = c.ink(24f, s.ink(s.w / 2, s.h / 2), display = true)
+            val titleP = c.statement(s.ink(s.w / 2, s.h / 2))
             canvas.textTop("Mail", p, p, titleP)
             val noteP = c.ink(13f, s.muted(s.w / 2, s.h / 2), 450)
             wrap("Tap to connect Gmail and Outlook", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
@@ -271,14 +271,14 @@ object MailPainter : Painter {
             // One line, centred on the figures
             canvas.drawText(fit(heading, headP, headW), tx, p + capNum / 2 + capHeight(headP) / 2, headP)
         } else {
-            val subP = c.ink(13f, if (warning != null) s.accent(tx + 30f, p + capNum) else s.muted(tx + 30f, p + capNum), 450)
+            val subP = c.meta(if (warning != null) s.accent(tx + 30f, p + capNum) else s.muted(tx + 30f, p + capNum), 1f, 13f)
             canvas.textTop(fit(heading, headP, headW), tx, p + 1f, headP)
             canvas.drawText(fit(second, subP, headW), tx, p + capNum, subP)
         }
         var y = p + capNum + (if (bare) 12f else 20f)
 
         if (items.isEmpty()) {
-            val emptyP = c.ink(22f, s.ink(s.w / 2, y + 12f), display = true)
+            val emptyP = c.statement(s.ink(s.w / 2, y + 12f))
             canvas.textTop(if (boxes) "Inbox empty" else "No mail yet", p, y + 2f, emptyP)
             val noteP = c.ink(13f, s.muted(s.w / 2, y + 34f), 450)
             wrap(if (boxes) "Nothing waiting in the inbox" else "Emails appear here as they arrive, and stay for a week", noteP, s.w - 2 * p, 2).forEachIndexed { i, l ->
@@ -292,14 +292,14 @@ object MailPainter : Painter {
         if (!bare) return Scene(hits, listTop = y - 6f)
 
         val senderP = c.ink(14.5f, s.ink(s.w / 2, y), 600)
-        val timeP = c.ink(12.5f, s.muted(s.w - p, y), 500).apply { textAlign = Paint.Align.RIGHT }
+        val timeP = c.meta(s.muted(s.w - p, y)).apply { textAlign = Paint.Align.RIGHT }
         val subjectP = c.ink(14f, s.ink(s.w / 2, y), 450)
-        val previewP = c.ink(12.5f, s.muted(s.w / 2, y), 450)
+        val previewP = c.meta(s.muted(s.w / 2, y))
         val rowH = if (bare) 22f else if (tall) 62f else 44f
         val gap = if (bare) 4f else 10f
         val x0 = p
         val width = s.w - p - x0
-        val labelP = c.ink(11f, s.muted(s.w / 2, y), 600, tracking = 0.16f)
+        val labelP = c.label(s.muted(s.w / 2, y))
         // First, how many rows fit; then the room left over is shared between them, so the list fills
         // the widget instead of stopping short above an empty band
         fun plan(): Pair<Int, Float> {
@@ -357,7 +357,7 @@ object MailPainter : Painter {
             shown++
         }
         if (shown < items.size && !bare) {
-            val moreP = c.ink(12.5f, s.muted(s.w / 2, y + 6f), 500)
+            val moreP = c.meta(s.muted(s.w / 2, y + 6f))
             canvas.textTop("+ ${items.size - shown} more", x0, y + 2f, moreP)
         }
         return Scene(hits)
@@ -385,7 +385,7 @@ object MailPainter : Painter {
             in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
             else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))
         }
-        val timeP = c.ink(12.5f, s.muted(width - p, sampleY), 500).apply { textAlign = Paint.Align.RIGHT }
+        val timeP = c.meta(s.muted(width - p, sampleY)).apply { textAlign = Paint.Align.RIGHT }
         cv.drawText(time, width - p, mid + capHeight(timeP) / 2, timeP)
         val timeW = timeP.measureText(time)
         val senderP = c.ink(14.5f, if (m.fresh) s.ink(x0 + w / 2, sampleY) else s.muted(x0 + w / 2, sampleY), if (m.fresh) 600 else 500)
@@ -393,14 +393,14 @@ object MailPainter : Painter {
         val subjectP = c.ink(14f, if (m.fresh) s.ink(x0 + w / 2, sampleY) else s.muted(x0 + w / 2, sampleY), 450)
         cv.drawText(fit(m.subject, subjectP, w), x0, mid + 19f + capHeight(subjectP) / 2, subjectP)
         if (st.tall && m.preview.isNotEmpty()) {
-            val previewP = c.ink(12.5f, s.muted(x0 + w / 2, sampleY), 450)
+            val previewP = c.meta(s.muted(x0 + w / 2, sampleY))
             cv.drawText(fit(m.preview, previewP, w), x0, mid + 37f + capHeight(previewP) / 2, previewP)
         }
     }
 
     /** The quiet divider where read mail begins. */
     fun paintDivider(c: Context, cv: Canvas, s: Surface, st: RowStyle, boxes: Boolean, sampleY: Float) {
-        val labelP = c.ink(11f, s.muted(s.w / 2, sampleY), 600, tracking = 0.16f)
+        val labelP = c.label(s.muted(s.w / 2, sampleY))
         cv.textTop(if (boxes) "READ" else "EARLIER", st.x0, 9f, labelP)
     }
 
