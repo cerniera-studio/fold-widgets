@@ -22,6 +22,8 @@ class MailItem(
     val link: String = "",
     /** Which inbox it came from: gmail or outlook; empty for notification mail. */
     val source: String = "",
+    /** Gmail's own ids for it (message id, thread id, Message-ID header), kept for the Outlook link test. */
+    val ids: String = "",
 ) {
     val id get() = "${sender.lowercase()}|${subject.lowercase()}"
 }
@@ -239,6 +241,10 @@ object MailPainter : Painter {
             return Scene(hits)
         }
 
+        // The list scrolls, as Outlook's own widget does (1 Nov): the header stays in the picture,
+        // and each email is drawn as a row of its own in a scrolling list laid over the glass
+        if (!bare) return Scene(hits, listTop = y - 6f)
+
         val senderP = c.ink(14.5f, s.ink(s.w / 2, y), 600)
         val timeP = c.ink(12.5f, s.muted(s.w - p, y), 500).apply { textAlign = Paint.Align.RIGHT }
         val subjectP = c.ink(14f, s.ink(s.w / 2, y), 450)
@@ -315,6 +321,52 @@ object MailPainter : Painter {
         }
         return Scene(hits)
     }
+
+    /** The measures a row uses, shared by the widget and its scrolling list. */
+    class RowStyle(val p: Float, val tall: Boolean) {
+        val icon = 18f
+        val x0 get() = p + icon + 11f
+        fun height(m: MailItem) = if (tall && m.preview.isNotEmpty()) 62f else 44f
+        val divider = 30f
+    }
+
+    fun rowStyle(s: Surface) = RowStyle(if (minOf(s.w, s.h) >= 220f) 18f else 15f, s.h >= 330f)
+
+    /**
+     * One email as a row of the scrolling list, drawn on a transparent canvas [width] dp wide.
+     * Ink is read from the glass at [sampleY], the middle of the list, as the row moves over it.
+     */
+    fun paintRow(c: Context, cv: Canvas, s: Surface, st: RowStyle, m: MailItem, width: Float, sampleY: Float) {
+        val p = st.p; val x0 = st.x0; val w = width - p - x0
+        val mid = 9f + 3f
+        if (appFor(c, m) != null) Icons.of(c, appFor(c, m)!!)?.let { d ->
+            Icons.draw(cv, d, RectF(p, mid - st.icon / 2, p + st.icon, mid + st.icon / 2), if (m.fresh) 255 else 115)
+        }
+        val time = when (val d = m.time) {
+            in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
+            else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))
+        }
+        val timeP = c.ink(12.5f, s.muted(width - p, sampleY), 500).apply { textAlign = Paint.Align.RIGHT }
+        cv.drawText(time, width - p, mid + capHeight(timeP) / 2, timeP)
+        val timeW = timeP.measureText(time)
+        val senderP = c.ink(14.5f, if (m.fresh) s.ink(x0 + w / 2, sampleY) else s.muted(x0 + w / 2, sampleY), if (m.fresh) 600 else 500)
+        cv.drawText(fit(m.sender, senderP, w - timeW - 10f), x0, mid + capHeight(senderP) / 2, senderP)
+        val subjectP = c.ink(14f, if (m.fresh) s.ink(x0 + w / 2, sampleY) else s.muted(x0 + w / 2, sampleY), 450)
+        cv.drawText(fit(m.subject, subjectP, w), x0, mid + 19f + capHeight(subjectP) / 2, subjectP)
+        if (st.tall && m.preview.isNotEmpty()) {
+            val previewP = c.ink(12.5f, s.muted(x0 + w / 2, sampleY), 450)
+            cv.drawText(fit(m.preview, previewP, w), x0, mid + 37f + capHeight(previewP) / 2, previewP)
+        }
+    }
+
+    /** The quiet divider where read mail begins. */
+    fun paintDivider(c: Context, cv: Canvas, s: Surface, st: RowStyle, boxes: Boolean, sampleY: Float) {
+        val labelP = c.ink(11f, s.muted(s.w / 2, sampleY), 600, tracking = 0.16f)
+        cv.textTop(if (boxes) "READ" else "EARLIER", st.x0, 9f, labelP)
+    }
+
+    /** What a tap on an email does; shared with the scrolling list. */
+    fun openAct(c: Context, m: MailItem): Act? = open(c, m, Mail.openInbox(c))
 
     /** The app whose icon marks the email's account. */
     private fun appFor(c: Context, m: MailItem): String? = when (m.source) {

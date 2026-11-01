@@ -191,7 +191,7 @@ object Mailbox {
         val arr = JSONArray()
         items.forEach {
             arr.put(JSONObject().put("k", it.key).put("s", it.sender).put("j", it.subject).put("v", it.preview)
-                .put("a", it.account).put("t", it.time).put("u", it.fresh).put("l", it.link))
+                .put("a", it.account).put("t", it.time).put("u", it.fresh).put("l", it.link).put("i", it.ids))
         }
         Prefs.of(c).edit().putString("mb_cache_$kind", arr.toString()).putLong("mb_synced_$kind", System.currentTimeMillis()).apply()
     }
@@ -206,7 +206,7 @@ object Mailbox {
                     val o = arr.getJSONObject(i)
                     val sender = o.optString("s"); val subject = o.optString("j")
                     MailItem(o.optString("k"), pkg, sender, subject, o.optString("v"), o.optString("a"), o.optLong("t"),
-                        Mail.linkFor(sender, subject), o.optBoolean("u"), o.optString("l"), kind)
+                        Mail.linkFor(sender, subject), o.optBoolean("u"), o.optString("l"), kind, o.optString("i"))
                 }
             }.getOrDefault(emptyList())
         }.sortedByDescending { it.time }
@@ -265,8 +265,11 @@ object Gmail {
             inbox.fetch(msgs, FetchProfile().apply {
                 add(FetchProfile.Item.ENVELOPE); add(FetchProfile.Item.FLAGS); add(UIDFolder.FetchProfileItem.UID)
             })
+            val gids = gmailIds(inbox, chosen)
             val items = msgs.reversed().mapIndexed { i, m ->
                 val uid = inbox.getUID(m)
+                val g = gids[m.messageNumber]
+                val header = runCatching { (m as javax.mail.internet.MimeMessage).messageID }.getOrNull().orEmpty()
                 val key = "g$uid"
                 val from = m.from?.firstOrNull() as? InternetAddress
                 val sender = from?.personal?.takeIf { it.isNotBlank() } ?: from?.address.orEmpty()
@@ -276,7 +279,8 @@ object Gmail {
                     (m.receivedDate ?: m.sentDate)?.time ?: 0L, null,
                     fresh = !m.flags.contains(javax.mail.Flags.Flag.SEEN),
                     link = "",
-                    source = Mailbox.GMAIL)
+                    source = Mailbox.GMAIL,
+                    ids = if (g == null) "" else "${g.first}|${g.second}|$header")
             }
             inbox.close(false)
             return items
@@ -297,11 +301,18 @@ object Gmail {
     }.getOrNull()
 
     /** Gmail's conversation id for each message number: what its web and app links are built from. */
-    private fun threads(inbox: IMAPFolder, numbers: List<Int>): Map<Int, Long> = runCatching {
+    private fun gmailIds(inbox: IMAPFolder, numbers: List<Int>): Map<Int, Pair<Long, Long>> = runCatching {
         @Suppress("UNCHECKED_CAST")
-        val replies = inbox.doCommand(IMAPFolder.ProtocolCommand { p -> p.command("FETCH ${numbers.joinToString(",")} (X-GM-THRID)", null) }) as Array<Response>
-        val re = Regex("^(?:\\*\\s+)?(\\d+)\\s+FETCH.*X-GM-THRID\\s+(\\d+)")
-        replies.mapNotNull { r -> re.find(r.toString().trim())?.let { it.groupValues[1].toInt() to it.groupValues[2].toLong() } }.toMap()
+        val replies = inbox.doCommand(IMAPFolder.ProtocolCommand { p -> p.command("FETCH ${numbers.joinToString(",")} (X-GM-MSGID X-GM-THRID)", null) }) as Array<Response>
+        val num = Regex("^(?:\\*\\s+)?(\\d+)\\s+FETCH")
+        val msg = Regex("X-GM-MSGID\\s+(\\d+)")
+        val thr = Regex("X-GM-THRID\\s+(\\d+)")
+        replies.mapNotNull { r ->
+            val t = r.toString().trim()
+            val n = num.find(t)?.groupValues?.get(1)?.toInt() ?: return@mapNotNull null
+            val m = msg.find(t)?.groupValues?.get(1)?.toLong() ?: return@mapNotNull null
+            n to (m to (thr.find(t)?.groupValues?.get(1)?.toLong() ?: 0L))
+        }.toMap()
     }.getOrDefault(emptyMap())
 
     /** The plain text of a message, or its HTML if it has no plain part. */

@@ -30,6 +30,33 @@ object Probe {
         Sample(it.subject, rest, u.getQueryParameter("immutableID"), it.account)
     }
 
+    /** The newest Googlemail email with Gmail's own ids, for the Outlook link test. */
+    class GmailSample(val subject: String, val msg: Long, val thread: Long, val header: String, val account: String)
+
+    fun gmailSample(c: Context): GmailSample? = Mailbox.items(c).firstOrNull { it.source == Mailbox.GMAIL && it.ids.isNotEmpty() }?.let {
+        val p = it.ids.split('|')
+        GmailSample(it.subject, p[0].toLongOrNull() ?: return null, p.getOrNull(1)?.toLongOrNull() ?: 0L, p.getOrNull(2).orEmpty(), it.account)
+    }
+
+    /**
+     * Outlook converts a server's id into its own ("restIdFromServerId" in its code), so for a
+     * Gmail account it may accept Gmail's own message id. Each way, tried with a real email.
+     */
+    fun gmailTrials(s: GmailSample): List<Pair<String, String>> {
+        val a = Uri.encode(s.account)
+        val hex = java.lang.Long.toHexString(s.msg); val thr = java.lang.Long.toHexString(s.thread)
+        val bare = s.header.removePrefix("<").removeSuffix(">")
+        return listOf(
+            "1  Gmail message id (hex)" to "ms-outlook://emails/message/open?restID=$hex&account=$a",
+            "2  Gmail message id (number)" to "ms-outlook://emails/message/open?restID=${s.msg}&account=$a",
+            "3  Gmail thread id (hex)" to "ms-outlook://emails/message/open?restID=$thr&account=$a",
+            "4  Message-ID header" to "ms-outlook://emails/message/open?restID=${Uri.encode(s.header)}&account=$a",
+            "5  Message-ID, no brackets" to "ms-outlook://emails/message/open?restID=${Uri.encode(bare)}&account=$a",
+            "6  Gmail id as both ids" to "ms-outlook://emails/message/open?restID=$hex&immutableID=$hex&account=$a",
+            "7  The Googlemail inbox" to "ms-outlook://emails?account=$a",
+        )
+    }
+
     /** Every way in Outlook might take, filled with a real email's ids. */
     fun trials(s: Sample): List<Pair<String, String>> {
         val r = Uri.encode(s.rest); val i = s.immutable?.let { Uri.encode(it) }; val a = Uri.encode(s.account)

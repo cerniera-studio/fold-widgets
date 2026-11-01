@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every widget is one picture drawn at its exact size, with invisible touch areas laid over
+     the parts that act, and a progress line that can move without redrawing the picture.
+     fitCenter, never fitXY: if the picture and the space ever disagree, it is scaled evenly,
+     never stretched out of shape (31 Oct). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layoutDirection="ltr"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/face"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:importantForAccessibility="no" />
+
+    <ProgressBar
+        android:id="@+id/progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_gravity="top|start"
+        android:indeterminate="false"
+        android:max="1000"
+        android:progressDrawable="@drawable/progress_line"
+        android:visibility="gone" />
+
+
+    <FrameLayout android:id="@+id/hit0" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit1" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit2" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit3" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit4" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit5" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit6" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit7" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit8" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit9" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit10" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+    <FrameLayout android:id="@+id/hit11" android:layout_width="0dp" android:layout_height="0dp"
+        android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
+
+
+    <!-- The scrolling list (mail): rows drawn as pictures, laid over the glass, above the touch
+         areas so it takes its own taps and swipes. Its edges fade as rows scroll past. -->
+    <ListView
+        android:id="@+id/list"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_gravity="top|start"
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:scrollbars="none"
+        android:overScrollMode="never"
+        android:listSelector="@android:color/transparent"
+        android:requiresFadingEdge="vertical"
+        android:fadingEdgeLength="22dp"
+        android:cacheColorHint="@android:color/transparent" />
+</FrameLayout>

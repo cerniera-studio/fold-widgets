@@ -33,7 +33,8 @@ class Hit(val rect: RectF, val act: Act, val label: String)
 class Line(val rect: RectF, val value: Float, val track: Int, val fill: Int)
 
 /** What a painter leaves besides the picture: where touches go, and the line if there is one. */
-class Scene(val hits: List<Hit>, val line: Line? = null)
+/** [listTop]: where a scrolling list of rows begins, in dp, for widgets whose content scrolls (mail). */
+class Scene(val hits: List<Hit>, val line: Line? = null, val listTop: Float = -1f)
 
 /** Paints one kind of widget on a canvas measured in dp, over its finish. */
 interface Painter {
@@ -185,7 +186,18 @@ object Widgets {
         val frame = frameOf(c, id)
         val size = frame.dp
         val (bitmap, scene) = draw(c, id, kind, frame, Prefs.finish(c, id), Backdrop.ground(c, id))
-        val rv = RemoteViews(c.packageName, R.layout.widget)
+        val listed = scene.listTop >= 0f
+        val rv = RemoteViews(c.packageName, if (listed) R.layout.widget_list else R.layout.widget)
+        if (listed) {
+            // A scrolling list of rows over the picture, filled by MailRows, each row its own picture
+            place(rv, R.id.list, RectF(0f, scene.listTop, size.width, size.height - 6f))
+            rv.setRemoteAdapter(R.id.list, Intent(c, MailRows::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse("foldwidgets://rows/$id")))
+            rv.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(c, id * 32 + 31,
+                Intent(c, TapActivity::class.java).setData(Uri.parse("foldwidgets://row/$id"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE))
+        }
         rv.setImageViewBitmap(R.id.face, bitmap)
         rv.setContentDescription(R.id.face, kind.name.lowercase())
         HITS.forEachIndexed { i, viewId ->
@@ -206,6 +218,8 @@ object Widgets {
             rv.setColorStateList(R.id.progress, "setProgressBackgroundTintList", ColorStateList.valueOf(line.track))
         }
         AppWidgetManager.getInstance(c).updateAppWidget(id, rv)
+        @Suppress("DEPRECATION")
+        if (listed) AppWidgetManager.getInstance(c).notifyAppWidgetViewDataChanged(id, R.id.list)
         // What was reported, what was measured and what was drawn, for the settings screen
         val r = reportedSize(c, id)
         val seat = Backdrop.seat(c, id)
@@ -238,12 +252,23 @@ object Widgets {
      * The picture. Drawn on a canvas scaled to dp, so painters think in dp and the result is
      * sharp at the screen's density. [ground] is what is behind the widget.
      */
-    fun draw(c: Context, id: Int, kind: Kind, frame: Frame, finish: Finish, ground: Ground): Pair<Bitmap, Scene> {
+    /** The density and pixel size a widget's picture is drawn at: its frame, kept inside what a launcher accepts. */
+    fun drawn(frame: Frame): Triple<Float, Int, Int> {
         var d = frame.density
         var px = frame.px.coerceAtLeast(1); var py = frame.py.coerceAtLeast(1)
-        // Stay well inside what a launcher will accept for one widget's picture
         val longest = maxOf(px, py)
         if (longest > 1800) { val f = 1800f / longest; d *= f; px = (px * f).toInt(); py = (py * f).toInt() }
+        return Triple(d, px, py)
+    }
+
+    fun surfaceFor(c: Context, id: Int, frame: Frame): Surface {
+        val (d, px, py) = drawn(frame)
+        val size = SizeF(px / d, py / d)
+        return Surface(Prefs.finish(c, id), Backdrop.ground(c, id), size.width, size.height, Prefs.radius(c).toFloat().coerceAtMost(minOf(size.width, size.height) / 2f), 1.1f / d)
+    }
+
+    fun draw(c: Context, id: Int, kind: Kind, frame: Frame, finish: Finish, ground: Ground): Pair<Bitmap, Scene> {
+        val (d, px, py) = drawn(frame)
         val size = SizeF(px / d, py / d)
         val bmp = Bitmap.createBitmap(px, py, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp).apply { scale(d, d) }
