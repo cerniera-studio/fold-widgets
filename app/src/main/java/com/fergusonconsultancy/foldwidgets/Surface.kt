@@ -24,8 +24,7 @@ import android.graphics.Shader
 class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float, val radius: Float, val hairline: Float) {
 
     private val faces: Array<Face> = Array(Ground.COLS * Ground.ROWS) { z ->
-        val colour = ground.zones[z]
-        faceFor(finish, colour, lightOver(lum(colour)))
+        legibleFace(finish, ground.zones[z], ground.bright[z], ground.dark[z], throughBlur = finish == Finish.VETRO && ground.seated && ground.frost != null)
     }
 
     /** The face under a point, as fractions of the widget's width and height. */
@@ -38,7 +37,7 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
     /** Ink for a mark whose centre is at ([x], [y]) px. */
     fun ink(x: Float, y: Float) = faceAt(x / w, y / h).ink
     /** Secondary ink: the same tone, quieter. */
-    fun muted(x: Float, y: Float) = (ink(x, y) and 0x00FFFFFF) or 0x9E000000.toInt()
+    fun muted(x: Float, y: Float) = faceAt(x / w, y / h).let { (it.ink and 0x00FFFFFF) or (it.mutedAlpha shl 24) }
     /** Faint ink, for tracks and wells. */
     fun faint(x: Float, y: Float) = (ink(x, y) and 0x00FFFFFF) or 0x24000000
     /** The finish's light: champagne over dark faces, bronze over light ones. */

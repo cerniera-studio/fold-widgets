@@ -359,7 +359,8 @@ class SettingsActivity : Activity() {
             "Each widget is drawn at its exact size, so the type, artwork and controls scale as you resize it. " +
             "The small and large defaults match the two widgets on your cover screen.\n\n" +
             "The adaptive finishes read what is behind each widget in a grid of zones, as the taskbar reads the screen: dark over light, " +
-            "light over dark, with a trace of the colour beneath. A launcher never tells a widget where it sits, so each one learns it from " +
+            "light over dark, with a trace of the colour beneath. Legibility comes first: each zone is checked at its lightest and darkest, " +
+            "not its average, and if the type would not reach a contrast of 7 to 1 the finish flips, or its glass thickens just enough. A launcher never tells a widget where it sits, so each one learns it from " +
             "your first tap. Until then it reads the wallpaper's overall colour.\n\n" +
             "The glass is the wallpaper itself, thickened. Cristallo is clear: near its rim it bends in what lies just beyond the edge, " +
             "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Both carry one highlight at the upper left, " +

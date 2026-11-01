@@ -40,8 +40,8 @@ enum class Finish(val label: String, val fill: Int, val ink: Int, val edge: Int,
     val short get() = label.substringBefore(" (")
 }
 
-/** One face of a finish: the glass, its ink, its edge and its light. */
-data class Face(val fill: Int, val ink: Int, val edge: Int, val glow: Int)
+/** One face of a finish: the glass, its ink, its edge and its light, and how opaque its muted ink must be. */
+data class Face(val fill: Int, val ink: Int, val edge: Int, val glow: Int, val mutedAlpha: Int = 0x9E)
 
 /**
  * How [finish] looks over a stretch of ground whose colour is [colour], when it should be the
@@ -90,6 +90,73 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
  * luminance [lum]. Static images never flicker, so one threshold is enough.
  */
 fun lightOver(lum: Float): Boolean = lum < 0.45f
+
+/**
+ * Legibility is the finish's first duty (1 Nov 2026, Membrane over a vivid purple wallpaper: the
+ * face was chosen by the ground's mean brightness alone, the wallpaper's bright lines showed through
+ * the translucent glass behind the type, and the words went grey on lilac).
+ *
+ * So every adaptive face is now proven, not assumed. The type sits on the glass laid over the
+ * ground, and the ground is judged at its lightest and darkest tenth, not its mean. Measured as
+ * WCAG contrast:
+ * - ink must reach 7:1 over both (AAA), so the muted ink beneath it can still reach 4.5:1;
+ * - if the face the luminance rule picks cannot, its opposite is tried;
+ * - if neither can, the glass thickens and sheds the ground's tint, step by step, only as far as
+ *   it must, so a finish keeps as much of its character as legibility allows;
+ * - the finish's light (day headings) is drawn towards the ink until it reaches 4.5:1;
+ * - the muted ink's opacity rises until it reaches 4.5:1.
+ * [throughBlur]: Vetro shows the ground blurred, so its detail is gone and the mean is what lies
+ * behind the type.
+ */
+fun legibleFace(finish: Finish, mean: Int, bright: Int, dark: Int, throughBlur: Boolean): Face {
+    val hi = if (throughBlur) mean else bright
+    val lo = if (throughBlur) mean else dark
+    fun over(fill: Int, g: Int) = blend(g, fill or 0xFF000000.toInt(), Color.alpha(fill) / 255f)
+    fun score(f: Face) = minOf(contrast(f.ink, over(f.fill, hi)), contrast(f.ink, over(f.fill, lo)))
+    if (!finish.adaptive) return finish(Face(finish.fill, finish.ink, finish.edge, finish.indicator), hi, lo, ::over)
+    val first = faceFor(finish, mean, lightOver(lum(mean)))
+    val other = faceFor(finish, mean, !lightOver(lum(mean)))
+    var face = if (score(first) >= INK_MIN || score(first) >= score(other)) first else other
+    var step = 0
+    while (score(face) < INK_MIN && step < 14) {
+        // Thicken the glass and draw it towards its own pole: ivory under dark ink, iron under light
+        val pole = if (lum(face.ink) < 0.5f) 0xF6F3EC else 0x0E1110
+        val a = (Color.alpha(face.fill) + 10).coerceAtMost(0xF6)
+        face = face.copy(fill = (a shl 24) or (blend(face.fill or 0xFF000000.toInt(), pole or 0xFF000000.toInt(), 0.14f) and 0xFFFFFF))
+        step++
+    }
+    return finish(face, hi, lo, ::over)
+}
+
+private const val INK_MIN = 7f
+private const val SECONDARY_MIN = 4.5f
+
+/** The light and the muted ink, brought up to [SECONDARY_MIN] over the face's worst ground. */
+private fun finish(face: Face, hi: Int, lo: Int, over: (Int, Int) -> Int): Face {
+    val grounds = listOf(over(face.fill, hi), over(face.fill, lo))
+    fun worst(colour: Int) = grounds.minOf { contrast(colour, it) }
+    var glow = face.glow
+    var k = 0
+    while (worst(glow) < SECONDARY_MIN && k < 10) { glow = blend(glow, face.ink, 0.15f); k++ }
+    var a = 0x9E
+    while (a < 0xFF && grounds.minOf { contrast(blend(it, face.ink, a / 255f), it) } < SECONDARY_MIN) a = minOf(0xFF, a + 8)
+    return face.copy(glow = glow, mutedAlpha = a)
+}
+
+/** [a] laid over [b] at opacity [t]: b + (a - b) * t, per channel, opaque. */
+fun blend(b: Int, a: Int, t: Float): Int = Color.rgb(
+    (Color.red(b) + (Color.red(a) - Color.red(b)) * t).toInt().coerceIn(0, 255),
+    (Color.green(b) + (Color.green(a) - Color.green(b)) * t).toInt().coerceIn(0, 255),
+    (Color.blue(b) + (Color.blue(a) - Color.blue(b)) * t).toInt().coerceIn(0, 255))
+
+/** WCAG relative luminance, linearised sRGB. */
+fun relLum(c: Int): Float {
+    fun ch(v: Int): Float { val s = v / 255f; return if (s <= 0.03928f) s / 12.92f else Math.pow(((s + 0.055f) / 1.055f).toDouble(), 2.4).toFloat() }
+    return 0.2126f * ch(Color.red(c)) + 0.7152f * ch(Color.green(c)) + 0.0722f * ch(Color.blue(c))
+}
+
+/** WCAG contrast ratio between two opaque colours, 1 to 21. */
+fun contrast(a: Int, b: Int): Float { val x = relLum(a); val y = relLum(b); return (maxOf(x, y) + 0.05f) / (minOf(x, y) + 0.05f) }
 
 /** Relative luminance of a colour, 0 to 1. */
 fun lum(c: Int): Float = (0.2126f * Color.red(c) + 0.7152f * Color.green(c) + 0.0722f * Color.blue(c)) / 255f

@@ -210,7 +210,13 @@ object Backdrop {
  * [frost], heavily blurred and exactly the widget's area, for Vetro; and [clear], barely softened
  * and reaching [margin] px beyond every edge, for Cristallo's lens.
  */
-class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val margin: Int, val zones: IntArray, val seated: Boolean) {
+/**
+ * [bright] and [dark] (1 Nov): each zone's lightest and darkest tenth, averaged. A zone's mean hides
+ * the bright lines of a patterned wallpaper, and those lines show through translucent finishes
+ * right behind the type, so legibility is judged against both, never the mean alone.
+ */
+class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val margin: Int, val zones: IntArray, val seated: Boolean,
+                                 val bright: IntArray = zones, val dark: IntArray = zones) {
     /** The zone colour nearest a point given as fractions of the widget's width and height. */
     fun at(fx: Float, fy: Float): Int {
         val x = (fx * COLS).toInt().coerceIn(0, COLS - 1)
@@ -230,15 +236,33 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
                 (picture.width - 2 * margin).coerceAtLeast(1), (picture.height - 2 * margin).coerceAtLeast(1))
             val w = inner.width; val h = inner.height
             val px = IntArray(w * h).also { inner.getPixels(it, 0, w, 0, 0, w, h) }
-            val zones = IntArray(COLS * ROWS) { z ->
+            val zones = IntArray(COLS * ROWS)
+            val bright = IntArray(COLS * ROWS)
+            val dark = IntArray(COLS * ROWS)
+            // Per zone: a histogram of luminance carrying each bin's colour, so the mean, the
+            // lightest tenth and the darkest tenth come from one pass
+            val count = IntArray(256); val rs = LongArray(256); val gs = LongArray(256); val bs = LongArray(256)
+            for (z in 0 until COLS * ROWS) {
+                java.util.Arrays.fill(count, 0); java.util.Arrays.fill(rs, 0); java.util.Arrays.fill(gs, 0); java.util.Arrays.fill(bs, 0)
                 val cx = z % COLS; val cy = z / COLS
                 val x0 = cx * w / COLS; val x1 = ((cx + 1) * w / COLS).coerceAtLeast(x0 + 1)
                 val y0 = cy * h / ROWS; val y1 = ((cy + 1) * h / ROWS).coerceAtLeast(y0 + 1)
                 var r = 0L; var g = 0L; var b = 0L; var n = 0
                 for (y in y0 until minOf(y1, h)) for (x in x0 until minOf(x1, w)) {
-                    val p = px[y * w + x]; r += (p shr 16) and 255; g += (p shr 8) and 255; b += p and 255; n++
+                    val p = px[y * w + x]; val pr = (p shr 16) and 255; val pg = (p shr 8) and 255; val pb = p and 255
+                    r += pr; g += pg; b += pb; n++
+                    val l = ((pr * 54 + pg * 183 + pb * 19) shr 8).coerceIn(0, 255)
+                    count[l]++; rs[l] += pr.toLong(); gs[l] += pg.toLong(); bs[l] += pb.toLong()
                 }
-                if (n == 0) 0xFF2A2F2C.toInt() else Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
+                if (n == 0) { zones[z] = 0xFF2A2F2C.toInt(); bright[z] = zones[z]; dark[z] = zones[z]; continue }
+                zones[z] = Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
+                fun tenth(range: IntProgression): Int {
+                    val want = maxOf(1, n / 10); var k = 0; var tr = 0L; var tg = 0L; var tb = 0L
+                    for (l in range) { if (k >= want) break; k += count[l]; tr += rs[l]; tg += gs[l]; tb += bs[l] }
+                    return if (k == 0) zones[z] else Color.rgb((tr / k).toInt(), (tg / k).toInt(), (tb / k).toInt())
+                }
+                bright[z] = tenth(255 downTo 0)
+                dark[z] = tenth(0..255)
             }
             // Frost: blurred small with its margin, so the blur has real ground at the edges, then cut
             val f = 96f / w
@@ -247,7 +271,7 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
             val fm = (margin * f).toInt()
             val frost = Bitmap.createBitmap(soft, fm.coerceAtMost(soft.width - 2), fm.coerceAtMost(soft.height - 2),
                 (soft.width - 2 * fm).coerceAtLeast(2), (soft.height - 2 * fm).coerceAtLeast(2))
-            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated)
+            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated, bright, dark)
         }
     }
 }

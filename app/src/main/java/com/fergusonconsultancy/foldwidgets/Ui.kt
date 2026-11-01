@@ -125,6 +125,16 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
             p.color = s.ink(sw * 0.75f, sh * 0.5f)
             canvas.drawText("Aa", sw / 2 + 10f, sh / 2 + 5f, p)
             canvas.restore()
+            // Follow app is a link, not a swatch (1 Nov): a small chain in the corner says so
+            if (finish == null) {
+                val cx = w - 16f * d; val cy = 16f * d
+                canvas.drawCircle(cx, cy, 11f * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6101412.toInt() })
+                val link = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.6f * d; color = Palette.CHAMPAGNE }
+                canvas.save(); canvas.rotate(-45f, cx, cy)
+                canvas.drawRoundRect(RectF(cx - 7.5f * d, cy - 2.6f * d, cx + 0.8f * d, cy + 2.6f * d), 2.6f * d, 2.6f * d, link)
+                canvas.drawRoundRect(RectF(cx - 0.8f * d, cy - 2.6f * d, cx + 7.5f * d, cy + 2.6f * d), 2.6f * d, 2.6f * d, link)
+                canvas.restore()
+            }
             if (chosen) canvas.drawRoundRect(RectF(1.5f * d, 1.5f * d, w - 1.5f * d, h - 1.5f * d), 16f * d, 16f * d,
                 Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2f * d; color = Palette.CHAMPAGNE })
         }
@@ -144,7 +154,7 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
         addView(c.label(finish?.short ?: "Follow app", 12.5f, if (chosen) Palette.CHAMPAGNE else Palette.MUTED, 500).apply {
             setPadding(c.px(2), c.px(8), 0, 0)
         })
-        if (finish == null) addView(c.label("Now ${Prefs.defaultFinish(c).short}", 11f, Palette.MUTED, 400).apply { setPadding(c.px(2), c.px(2), 0, 0) })
+        if (finish == null) addView(c.label("App finish: ${Prefs.defaultFinish(c).short}", 11f, Palette.MUTED, 400).apply { setPadding(c.px(2), c.px(2), 0, 0) })
         setOnClickListener { onPick(finish) }
     }
 }
