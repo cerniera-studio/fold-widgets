@@ -74,9 +74,9 @@ object Probe {
     }
 
     fun note(c: Context, route: String, error: Throwable?) {
-        val time = SimpleDateFormat("HH:mm:ss", Locale.UK).format(Date())
+        val time = SimpleDateFormat("dd HH:mm:ss", Locale.UK).format(Date())
         val line = "$time  $route: " + (error?.let { "FAILED (${it.javaClass.simpleName})" } ?: "started")
-        val old = Prefs.of(c).getString("probe_taps", "").orEmpty().lines().filter { it.isNotBlank() }.takeLast(7)
+        val old = Prefs.of(c).getString("probe_taps", "").orEmpty().lines().filter { it.isNotBlank() }.takeLast(29)
         Prefs.of(c).edit().putString("probe_taps", (old + line).joinToString("\n")).apply()
     }
 

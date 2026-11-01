@@ -72,11 +72,15 @@ object Mail {
 
     private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
 
-    private fun keep(m: MailItem) {
+    private fun keep(c: Context, m: MailItem) {
         val open = m.open ?: return
+        val fresh = !links.containsKey(m.id)
         links[m.id] = open
         if (m.subject.length >= 4) bySubject[norm(m.subject)] = open
+        if (fresh) Probe.note(c, "Kept a link from ${APPS[m.pkg] ?: m.pkg}'s notification (now ${links.size})", null)
     }
+
+    fun keptCount() = links.size
 
     /** Outlook's own link into an email it announced, kept from its notification: opens that email for either account. */
     fun linkFor(sender: String, subject: String): PendingIntent? =
@@ -95,13 +99,13 @@ object Mail {
     @Synchronized fun remember(c: Context) {
         // With an inbox connected the notifications are not listed, but their links into each email
         // are still the surest way in, so they are kept while they live
-        if (Mailbox.connected(c)) { onScreen(c).forEach { keep(it) }; return }
+        if (Mailbox.connected(c)) { onScreen(c).forEach { keep(c, it) }; return }
         if (!enabled(c)) return
         val now = onScreen(c)
         if (now.isEmpty()) return
         val kept = load(c).associateBy { it.id }.toMutableMap()
         for (m in now) {
-            keep(m)
+            keep(c, m)
             val old = kept[m.id]
             kept[m.id] = if (old == null || m.time >= old.time) m else old
         }

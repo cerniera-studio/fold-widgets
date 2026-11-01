@@ -136,6 +136,11 @@ class SettingsActivity : Activity() {
 
             if (gmail != null || outlook != null) {
                 // Googlemail link test (1 Nov): does Outlook accept Gmail's own ids for a Gmail email?
+                addView(row("Tap log", "What happened when you tapped emails, and when Outlook's links were kept. No email content.",
+                    button("Share", primary = false) {
+                        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, "Fold Widgets tap log\n" + Probe.taps(this@SettingsActivity).ifBlank { "(empty)" }), "Share the tap log"))
+                    }))
                 val main = Mailbox.mainOnly(this@SettingsActivity)
                 addView(row("Primary and Focused only", if (main) "As the apps notify: Gmail's Primary tab, Outlook's Focused inbox" else "Everything in both inboxes, promotions included",
                     button(if (main) "Show all" else "Main only", primary = false) {

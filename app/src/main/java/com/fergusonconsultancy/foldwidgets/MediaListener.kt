@@ -50,6 +50,7 @@ class MediaListener : android.service.notification.NotificationListenerService()
 
     override fun onListenerConnected() {
         instance = this
+        Probe.note(this, "Widget service started (kept links: ${Mail.keptCount()})", null)
         Widgets.later { Mail.remember(this) }
         mailSoon()
         val msm = getSystemService(MediaSessionManager::class.java)

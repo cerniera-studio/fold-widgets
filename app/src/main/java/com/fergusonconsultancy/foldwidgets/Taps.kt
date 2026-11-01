@@ -49,7 +49,7 @@ class TapActivity : Activity() {
             val started = runCatching { startActivity(each.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             // Which way an email tap actually went, so it can be read back from settings
             if (opened in Mail.APPS.keys) Probe.note(this, (if (each.data != null) "Message link ${each.data?.scheme}://${each.data?.host}${each.data?.path}" else "Outlook itself (fallback)") +
-                " [${each.getStringExtra(Probe.EXTRA_SOURCE) ?: "?"}]", started.exceptionOrNull())
+                " [${each.getStringExtra(Probe.EXTRA_SOURCE) ?: "?"}]" + (if (pending == null) ", no notification link for this email (${Mail.keptCount()} kept)" else ""), started.exceptionOrNull())
             if (started.isSuccess) return
         }
     }
