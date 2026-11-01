@@ -284,7 +284,10 @@ object Gmail {
                 MailItem(key, "", sender, m.subject.orEmpty().trim(), preview, address,
                     (m.receivedDate ?: m.sentDate)?.time ?: 0L, null,
                     fresh = !m.flags.contains(javax.mail.Flags.Flag.SEEN),
-                    link = "",
+                    // Tested on the phone (1 Nov): Outlook opens no Gmail email by any of Gmail's ids,
+                    // but does open that account's own inbox; the email itself opens only through
+                    // the link in Outlook's notification for it, used first when the widget has it
+                    link = "ms-outlook://emails?account=${Uri.encode(address)}",
                     source = Mailbox.GMAIL,
                     ids = if (g == null) "" else "${g.first}|${g.second}|$header")
             }

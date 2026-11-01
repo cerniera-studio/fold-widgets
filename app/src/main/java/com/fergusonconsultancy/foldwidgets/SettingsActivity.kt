@@ -136,22 +136,6 @@ class SettingsActivity : Activity() {
 
             if (gmail != null || outlook != null) {
                 // Googlemail link test (1 Nov): does Outlook accept Gmail's own ids for a Gmail email?
-                if (gmail != null && Probe.gmailSample(this@SettingsActivity) == null) addView(row("Googlemail link test",
-                    "Waiting for Gmail's ids for your newest email. Tap Refresh, then come back to this screen." +
-                        (Prefs.of(this@SettingsActivity).getString("gmail_ids_error", null)?.let { "\n$it" } ?: ""),
-                    button("Refresh", primary = false) {
-                        Thread { Mailbox.sync(applicationContext, force = true); runOnUiThread { build() } }.start()
-                    }))
-                Probe.gmailSample(this@SettingsActivity)?.let { sample ->
-                    addView(label("Googlemail link test. Each button asks Outlook to open this email: \"${sample.subject}\". Tell Claude which numbers open the email itself, which open an inbox, and which fail.",
-                        13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
-                    Probe.gmailTrials(sample).forEach { (name, link) ->
-                        addView(row(name, "", button("Try", primary = false) {
-                            val i = Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(Probe.OUTLOOK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            runCatching { startActivity(i) }.onFailure { toast("${name.take(1)}: Outlook refused this link") }
-                        }))
-                    }
-                }
                 val main = Mailbox.mainOnly(this@SettingsActivity)
                 addView(row("Primary and Focused only", if (main) "As the apps notify: Gmail's Primary tab, Outlook's Focused inbox" else "Everything in both inboxes, promotions included",
                     button(if (main) "Show all" else "Main only", primary = false) {
