@@ -264,7 +264,7 @@ object MusicPainter : Painter {
         })
         cv.restore()
         val p = 12f * k
-        val r = (minOf(s.w, s.h) * 0.16f).coerceIn(16f, 26f)
+        val r = (minOf(s.w, s.h) * 0.125f).coerceIn(14f, 22f)
         val cx = s.w - p - r; val cy = s.h - p - r
         disc(cv, s, np, cx, cy, r, r * 0.78f)
         val tw = cx - r - 8f * k - p
@@ -295,9 +295,15 @@ object MusicPainter : Painter {
         var a = width
         val room = footTop - 10f * k - (p + a + 10f * k)
         var chosen: Pair<android.text.TextPaint, List<String>>? = null
+        // As many whole-word lines as the room holds (up to six), at the largest size that fits
         for (size in listOf(18f, 17f, 16f, 15f, 14f, 13f).map { it * k }) {
             val tp = c.ink(size, colour, 600)
-            if (fitsWhole(text, tp, width, 3)) { val l = wrap(text, tp, width, 3); if (block(size, l.size) <= room) { chosen = tp to l; break } }
+            val most = ((room - 4f * k - artistP.textSize * 1.2f) / (size * 1.2f)).toInt().coerceIn(1, 6)
+            if (fitsWhole(text, tp, width, most)) { val l = wrap(text, tp, width, most); if (block(size, l.size) <= room) { chosen = tp to l; break } }
+        }
+        if (chosen == null && room > 13f * k * 1.2f * 2) {
+            val most = ((room - 4f * k - artistP.textSize * 1.2f) / (13f * k * 1.2f)).toInt().coerceIn(2, 6)
+            chosen = c.title(text, colour, width, most, listOf(13f * k), 600)
         }
         if (chosen == null) {
             chosen = c.title(text, colour, width, 2, listOf(13f * k), 600)
