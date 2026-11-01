@@ -14,4 +14,4 @@
     android:previewImage="@drawable/preview_music_wide"
     android:description="@string/desc_music_42"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
-    android:widgetFeatures="reconfigurable|configuration_optional" />
+    android:widgetFeatures="reconfigurable|configuration_optional|hide_from_picker" />

@@ -289,7 +289,7 @@ object MailPainter : Painter {
 
         // The list scrolls, as Outlook's own widget does (1 Nov): the header stays in the picture,
         // and each email is drawn as a row of its own in a scrolling list laid over the glass
-        if (!bare) return Scene(hits, listTop = y - 6f)
+        if (!bare) return Scene(hits, listTop = y - 12f)
 
         val senderP = c.ink(14.5f, s.ink(s.w / 2, y), 600)
         val timeP = c.meta(s.muted(s.w - p, y)).apply { textAlign = Paint.Align.RIGHT }
@@ -364,23 +364,30 @@ object MailPainter : Painter {
     }
 
     /** The measures a row uses, shared by the widget and its scrolling list. */
+    /**
+     * [previews]: Mail · With previews adds each email's opening; Mail · List never does, at any
+     * size (1 Nov: the two entries looked identical once placed). Rows breathe, 12 dp above and
+     * below the text, and a hairline separates one email from the next, as in Samsung Email's and
+     * Outlook's own widgets.
+     */
     class RowStyle(val p: Float, val tall: Boolean) {
         // No account mark (1 Nov): an icon per row implied where mail was sent, and was wrong for
         // Googlemail mail read in Outlook; Outlook itself filters by account. Text starts at the margin
         val x0 get() = p
-        fun height(m: MailItem) = if (tall && m.preview.isNotEmpty()) 62f else 44f
+        fun height(m: MailItem) = if (tall && m.preview.isNotEmpty()) 74f else 56f
         val divider = 30f
+        val top = 18f
     }
 
-    fun rowStyle(s: Surface) = RowStyle(if (minOf(s.w, s.h) >= 220f) 18f else 15f, s.h >= 330f)
+    fun rowStyle(s: Surface, previews: Boolean) = RowStyle(if (minOf(s.w, s.h) >= 220f) 18f else 15f, previews)
 
     /**
      * One email as a row of the scrolling list, drawn on a transparent canvas [width] dp wide.
      * Ink is read from the glass at [sampleY], the middle of the list, as the row moves over it.
      */
-    fun paintRow(c: Context, cv: Canvas, s: Surface, st: RowStyle, m: MailItem, width: Float, sampleY: Float) {
+    fun paintRow(c: Context, cv: Canvas, s: Surface, st: RowStyle, m: MailItem, width: Float, sampleY: Float, rule: Boolean) {
         val p = st.p; val x0 = st.x0; val w = width - p - x0
-        val mid = 9f + 3f
+        val mid = st.top
         val time = when (val d = m.time) {
             in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
             else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))
@@ -395,6 +402,11 @@ object MailPainter : Painter {
         if (st.tall && m.preview.isNotEmpty()) {
             val previewP = c.meta(s.muted(x0 + w / 2, sampleY))
             cv.drawText(fit(m.preview, previewP, w), x0, mid + 37f + capHeight(previewP) / 2, previewP)
+        }
+        // The separator, at the row's foot, inside the margins
+        if (rule) {
+            val y = st.height(m) - s.hairline / 2
+            cv.drawLine(x0, y, width - p, y, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline; color = s.faint(width / 2, sampleY) })
         }
     }
 

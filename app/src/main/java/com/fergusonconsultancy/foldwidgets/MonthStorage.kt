@@ -34,7 +34,9 @@ object MonthPainter : Painter {
         val today = Calendar.getInstance()
         var top = p
 
-        if (large) {
+        // Month · Full is headed by the month's name at every size with room for it; Month ·
+        // Compact is the grid alone, at every size (1 Nov: the two looked identical once placed)
+        if (Widgets.titled(c, id) && s.h >= 140f) {
             val titleP = c.heading(s.ink(s.w / 2, p + 10f * k), k, 17f)
             canvas.textTop(SimpleDateFormat("MMMM", Locale.getDefault()).format(today.time), p + 2f * k, top, titleP)
             top += capHeight(titleP) + 14f * k

@@ -224,7 +224,12 @@ object WeatherOptions {
     /** The details, the tiles at the foot of a large widget, in the order they are offered. */
     val DETAILS = listOf(Item.FEELS, Item.HUMIDITY, Item.WIND, Item.UV, Item.SUN, Item.AIR, Item.POLLEN, Item.PRESSURE, Item.VISIBILITY, Item.DEW)
 
-    fun on(c: Context, id: Int, item: Item): Boolean = Prefs.of(c).getBoolean("wx_${id}_${item.name}", true)
+    /**
+     * Weather · Today keeps to today: the hours and the details, no week unless switched on.
+     * Weather · Forecast leads with the week (1 Nov: the two looked identical once placed).
+     */
+    fun on(c: Context, id: Int, item: Item): Boolean =
+        Prefs.of(c).getBoolean("wx_${id}_${item.name}", item != Item.WEEK || Widgets.forecast(c, id))
     fun set(c: Context, id: Int, item: Item, on: Boolean) = Prefs.of(c).edit().putBoolean("wx_${id}_${item.name}", on).apply()
 }
 
@@ -254,13 +259,13 @@ object WeatherPainter : Painter {
         }
         fun on(i: WeatherOptions.Item) = WeatherOptions.on(c, id, i)
 
-        if (s.h < 190f && s.w >= s.h * 1.5f) strip(c, canvas, s, fc, place, p, ::on) else column(c, canvas, s, fc, place, p, ::on)
+        if (s.h < 190f && s.w >= s.h * 1.5f) strip(c, canvas, s, fc, place, p, ::on, Widgets.forecast(c, id)) else column(c, canvas, s, fc, place, p, ::on)
         return Scene(listOf(Hit(all, Weather.openApp(c), "Open Weather")))
     }
 
     // ---- A short, wide widget: the minimum in a row, then the hours ----------------------------
 
-    private fun strip(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, on: (WeatherOptions.Item) -> Boolean) {
+    private fun strip(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, on: (WeatherOptions.Item) -> Boolean, weekFirst: Boolean) {
         val (words, sky) = Weather.describe(fc.code)
         val tempP = c.ink(minOf(s.h * 0.52f, 64f), s.ink(p + 30f, s.h / 2), display = true)
         val temp = Weather.deg(fc.temp)
@@ -295,7 +300,10 @@ object WeatherPainter : Painter {
         val room = s.w - p - x
         if (room >= 2 * 46f) {
             cv.drawLine(x - 9f, p + 4f, x - 9f, s.h - p - 4f, Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline; color = s.faint(x, s.h / 2) })
-            if (on(WeatherOptions.Item.HOURLY)) hours(c, cv, s, fc, x, p, s.w - p, s.h - p) else if (on(WeatherOptions.Item.WEEK)) weekColumns(c, cv, s, fc, x, p, s.w - p, s.h - p)
+            // Forecast runs the week along the strip; Today, the hours
+            if (weekFirst && on(WeatherOptions.Item.WEEK)) weekColumns(c, cv, s, fc, x, p, s.w - p, s.h - p)
+            else if (on(WeatherOptions.Item.HOURLY)) hours(c, cv, s, fc, x, p, s.w - p, s.h - p)
+            else if (on(WeatherOptions.Item.WEEK)) weekColumns(c, cv, s, fc, x, p, s.w - p, s.h - p)
         }
     }
 

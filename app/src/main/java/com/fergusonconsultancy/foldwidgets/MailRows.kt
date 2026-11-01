@@ -49,7 +49,7 @@ class MailRows : RemoteViewsService() {
             // Rows scale with the widget on the main screen, as its header does
             val k = Kind.MAIL.scaleFor(whole.w, whole.h)
             val s = whole.scaled(k)
-            val st = MailPainter.rowStyle(s)
+            val st = MailPainter.rowStyle(s, Widgets.previews(c, id))
             val hDp = (if (m == null) st.divider else st.height(m)) * k
             val bmp = Bitmap.createBitmap(px, Math.round(hDp * d).coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             // Shown at its own pixels: the row's picture carries the density it was drawn at
@@ -57,7 +57,12 @@ class MailRows : RemoteViewsService() {
             val cv = Canvas(bmp).apply { scale(d * k, d * k) }
             val sampleY = s.h * 0.6f
             if (m == null) MailPainter.paintDivider(c, cv, s, st, boxes, sampleY)
-            else MailPainter.paintRow(c, cv, s, st, m, px / (d * k), sampleY)
+            else {
+                // No separator above the READ heading or below the last email
+                val next = position + 1
+                val rule = next < rows.size && rows[next] != null
+                MailPainter.paintRow(c, cv, s, st, m, px / (d * k), sampleY, rule)
+            }
             rv.setImageViewBitmap(R.id.row_face, bmp)
             if (m != null) {
                 rv.setContentDescription(R.id.row, "${m.sender}: ${m.subject}")

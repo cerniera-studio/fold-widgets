@@ -96,6 +96,17 @@ class WeatherLarge : Widget() {
 }
 
 object Widgets {
+    /**
+     * Which entry in the picker a widget was added from (1 Nov): each entry is a real variant,
+     * not only a starting size, so what its name promises holds at every size it is resized to.
+     */
+    fun variant(c: Context, id: Int): String =
+        runCatching { AppWidgetManager.getInstance(c).getAppWidgetInfo(id)?.provider?.className?.substringAfterLast('.') }.getOrNull().orEmpty()
+    fun previews(c: Context, id: Int) = variant(c, id) == "MailLarge"
+    fun detailed(c: Context, id: Int) = variant(c, id) == "AgendaLarge"
+    fun titled(c: Context, id: Int) = variant(c, id) == "MonthLarge"
+    fun forecast(c: Context, id: Int) = variant(c, id) != "WeatherSmall"
+
     const val EXTRA_HIT = "fw.hit"
     const val EXTRA_SIZE = "fw.size"
     const val EXTRA_PENDING = "fw.pending"

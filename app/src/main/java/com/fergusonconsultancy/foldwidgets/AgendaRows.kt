@@ -47,7 +47,7 @@ class AgendaRows : RemoteViewsService() {
             val whole = Widgets.surfaceFor(c, id, frame)
             val k = Kind.AGENDA.scaleFor(whole.w, whole.h)
             val s = whole.scaled(k)
-            val st = AgendaPainter.rowStyle(c, s)
+            val st = AgendaPainter.rowStyle(c, s, Widgets.detailed(c, id))
             val hDp = st.height(r.event, r.first) * k
             val bmp = Bitmap.createBitmap(px, Math.round(hDp * d).coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             bmp.density = Math.round(d * 160f)

@@ -136,7 +136,7 @@
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
-        <receiver android:name=".MusicCompact" android:exported="false" android:label="Music · Compact">
+        <receiver android:name=".MusicCompact" android:exported="false" android:label="Music">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_compact" />
         </receiver>

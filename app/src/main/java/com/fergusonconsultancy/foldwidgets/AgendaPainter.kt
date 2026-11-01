@@ -216,13 +216,14 @@ object AgendaPainter : Painter {
         fun height(o: Occurrence?, first: Boolean) = if (o == null) labelH + (if (first) 0f else 9f) else if (o.allDay) 27f else if (tall) 40f else 27f
     }
 
-    fun rowStyle(c: Context, s: Surface): RowStyle {
+    /** [detailed]: Agenda · Detailed gives every timed event its range and place; Agenda · List never does (1 Nov). */
+    fun rowStyle(c: Context, s: Surface, detailed: Boolean): RowStyle {
         val wide = s.w > s.h * 1.55f && s.w >= 240f
         val p = if (minOf(s.w, s.h) >= 220f) 18f else 15f
         val fmt = android.text.format.DateFormat.getTimeFormat(c)
         val widest = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 22); set(Calendar.MINUTE, 58) }
         val timeW = c.ink(14.5f, 0, 600).measureText(fmt.format(widest.time)) + 8f
-        return RowStyle(if (wide) s.w * 0.34f + 8f else p, s.h >= 330f, timeW)
+        return RowStyle(if (wide) s.w * 0.34f + 8f else p, detailed, timeW)
     }
 
     /** A day heading row: TODAY, TOMORROW, MON 2 NOV. */
