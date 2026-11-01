@@ -407,7 +407,9 @@ object Microsoft {
                     Mailbox.opening(o.optString("bodyPreview")), addr,
                     runCatching { java.time.Instant.parse(o.optString("receivedDateTime")).toEpochMilli() }.getOrDefault(0L), null,
                     fresh = !o.optBoolean("isRead", true),
-                    // Outlook's own link to one message (the form Microsoft To Do uses to open an email)
+                    // Outlook's own link to one message. Tested on Mechack's phone (1 Nov, Outlook 5.2642):
+                    // this form, and the same without the immutable id, open the email itself; the
+                    // immutable id alone, other paths and Outlook's web read links do not
                     link = "ms-outlook://emails/message/open?restID=${Uri.encode(id)}" +
                         (immutable[o.optString("internetMessageId")]?.let { "&immutableID=${Uri.encode(it)}" } ?: "") +
                         "&account=${Uri.encode(addr)}",
