@@ -298,8 +298,7 @@ object MailPainter : Painter {
         val previewP = c.ink(12.5f, s.muted(s.w / 2, y), 450)
         val rowH = if (bare) 22f else if (tall) 62f else 44f
         val gap = if (bare) 4f else 10f
-        val icon = if (bare) 0f else 18f
-        val x0 = p + (if (bare) 0f else icon + 11f)
+        val x0 = p
         val width = s.w - p - x0
         val labelP = c.ink(11f, s.muted(s.w / 2, y), 600, tracking = 0.16f)
         // First, how many rows fit; then the room left over is shared between them, so the list fills
@@ -337,9 +336,6 @@ object MailPainter : Painter {
             val mid = y + 9f
 
             // The account's mark: its app's icon, as on the home screen; faded once read
-            if (!bare) appFor(c, m)?.let { pkg ->
-                Icons.of(c, pkg)?.let { d -> Icons.draw(canvas, d, RectF(p, mid - icon / 2, p + icon, mid + icon / 2), if (m.fresh) 255 else 115) }
-            }
             val time = when (val d = m.time) {
                 in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
                 else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))
@@ -371,8 +367,9 @@ object MailPainter : Painter {
 
     /** The measures a row uses, shared by the widget and its scrolling list. */
     class RowStyle(val p: Float, val tall: Boolean) {
-        val icon = 18f
-        val x0 get() = p + icon + 11f
+        // No account mark (1 Nov): an icon per row implied where mail was sent, and was wrong for
+        // Googlemail mail read in Outlook; Outlook itself filters by account. Text starts at the margin
+        val x0 get() = p
         fun height(m: MailItem) = if (tall && m.preview.isNotEmpty()) 62f else 44f
         val divider = 30f
     }
@@ -386,9 +383,6 @@ object MailPainter : Painter {
     fun paintRow(c: Context, cv: Canvas, s: Surface, st: RowStyle, m: MailItem, width: Float, sampleY: Float) {
         val p = st.p; val x0 = st.x0; val w = width - p - x0
         val mid = 9f + 3f
-        if (appFor(c, m) != null) Icons.of(c, appFor(c, m)!!)?.let { d ->
-            Icons.draw(cv, d, RectF(p, mid - st.icon / 2, p + st.icon, mid + st.icon / 2), if (m.fresh) 255 else 115)
-        }
         val time = when (val d = m.time) {
             in startOfToday()..Long.MAX_VALUE -> android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(d))
             else -> SimpleDateFormat("EEE", Locale.getDefault()).format(java.util.Date(d))

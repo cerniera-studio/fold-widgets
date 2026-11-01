@@ -158,7 +158,7 @@ class SettingsActivity : Activity() {
             column.addView(eyebrow("Icons"))
             column.addView(card().apply {
                 val inUse = Icons.pack(this@SettingsActivity)
-                addView(label("App icons in the widgets (the mail accounts, the player) are taken from the icon pack you use on the home screen.",
+                addView(label("The music widget's player icon is taken from the icon pack you use on the home screen.",
                     13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
                 (packs.toList() + (null to "Each app's own icon")).forEach { (pkg, name) ->
                     val on = pkg == inUse
