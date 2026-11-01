@@ -11,7 +11,7 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/preview_music"
+    android:previewImage="@drawable/preview_music_poster"
     android:description="@string/desc_music_43"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

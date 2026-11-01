@@ -131,47 +131,47 @@
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
-        <receiver android:name=".MusicSmall" android:exported="false" android:label="Music · 4×2">
+        <receiver android:name=".MusicCompact" android:exported="false" android:label="Music · Compact">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_compact" />
+        </receiver>
+        <receiver android:name=".MusicSmall" android:exported="false" android:label="Music · Wide">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_small" />
         </receiver>
-        <receiver android:name=".MusicLarge" android:exported="false" android:label="Music · 4×3">
+        <receiver android:name=".MusicLarge" android:exported="false" android:label="Music · Poster">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_large" />
         </receiver>
-        <receiver android:name=".AgendaLarge" android:exported="false" android:label="Agenda · 4×4">
+        <receiver android:name=".AgendaLarge" android:exported="false" android:label="Agenda · Detailed">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/agenda_large" />
         </receiver>
-        <receiver android:name=".AgendaSmall" android:exported="false" android:label="Agenda · 4×3">
+        <receiver android:name=".AgendaSmall" android:exported="false" android:label="Agenda · List">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/agenda_small" />
         </receiver>
-        <receiver android:name=".WeatherSmall" android:exported="false" android:label="Weather · 4×2">
+        <receiver android:name=".WeatherSmall" android:exported="false" android:label="Weather · Today">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/weather_small" />
         </receiver>
-        <receiver android:name=".WeatherLarge" android:exported="false" android:label="Weather · 4×4">
+        <receiver android:name=".WeatherLarge" android:exported="false" android:label="Weather · Forecast">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/weather_large" />
         </receiver>
-        <receiver android:name=".MonthSmall" android:exported="false" android:label="Month · 3×2">
+        <receiver android:name=".MonthSmall" android:exported="false" android:label="Month · Compact">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_small" />
         </receiver>
-        <receiver android:name=".MonthLarge" android:exported="false" android:label="Month · 4×3">
+        <receiver android:name=".MonthLarge" android:exported="false" android:label="Month · Full">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_large" />
         </receiver>
-        <receiver android:name=".StorageSmall" android:exported="false" android:label="Storage · 3×2">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/storage_small" />
-        </receiver>
-        <receiver android:name=".MailSmall" android:exported="false" android:label="Mail · 4×3">
+        <receiver android:name=".MailSmall" android:exported="false" android:label="Mail · List">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/mail_small" />
         </receiver>
-        <receiver android:name=".MailLarge" android:exported="false" android:label="Mail · 4×4">
+        <receiver android:name=".MailLarge" android:exported="false" android:label="Mail · With previews">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/mail_large" />
         </receiver>

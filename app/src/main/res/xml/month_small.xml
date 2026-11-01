@@ -11,7 +11,7 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/preview_month"
+    android:previewImage="@drawable/preview_month_compact"
     android:description="@string/desc_month_32"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

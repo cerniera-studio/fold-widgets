@@ -42,7 +42,7 @@ interface Painter {
 }
 
 enum class Kind(val painter: Painter) {
-    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), STORAGE(StoragePainter), MAIL(MailPainter)
+    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), MAIL(MailPainter)
 }
 
 /**
@@ -65,13 +65,13 @@ abstract class Widget : AppWidgetProvider() {
     override fun onDeleted(c: Context, ids: IntArray) = ids.forEach { Prefs.forget(c, it) }
 }
 
+class MusicCompact : Widget() { override val kind = Kind.MUSIC }
 class MusicSmall : Widget() { override val kind = Kind.MUSIC }
 class MusicLarge : Widget() { override val kind = Kind.MUSIC }
 class AgendaSmall : Widget() { override val kind = Kind.AGENDA }
 class AgendaLarge : Widget() { override val kind = Kind.AGENDA }
 class MonthSmall : Widget() { override val kind = Kind.MONTH }
 class MonthLarge : Widget() { override val kind = Kind.MONTH }
-class StorageSmall : Widget() { override val kind = Kind.STORAGE }
 class MailSmall : Widget() { override val kind = Kind.MAIL }
 class MailLarge : Widget() { override val kind = Kind.MAIL }
 class WeatherSmall : Widget() {
@@ -92,11 +92,10 @@ object Widgets {
     const val EXTRA_ROOT = "fw.root"
 
     private val providers = mapOf(
-        Kind.MUSIC to listOf(MusicSmall::class.java, MusicLarge::class.java),
+        Kind.MUSIC to listOf(MusicCompact::class.java, MusicSmall::class.java, MusicLarge::class.java),
         Kind.AGENDA to listOf(AgendaSmall::class.java, AgendaLarge::class.java),
         Kind.WEATHER to listOf(WeatherSmall::class.java, WeatherLarge::class.java),
         Kind.MONTH to listOf(MonthSmall::class.java, MonthLarge::class.java),
-        Kind.STORAGE to listOf(StorageSmall::class.java),
         Kind.MAIL to listOf(MailSmall::class.java, MailLarge::class.java),
     )
 

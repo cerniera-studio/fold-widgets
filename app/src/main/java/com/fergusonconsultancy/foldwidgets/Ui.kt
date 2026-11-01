@@ -131,7 +131,7 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
     init {
         orientation = VERTICAL
         addView(picture, LayoutParams(-1, c.px(84)))
-        addView(c.label(finish?.short ?: "Default", 12.5f, if (chosen) Palette.CHAMPAGNE else Palette.MUTED, 500).apply {
+        addView(c.label(finish?.short ?: "Default · ${Prefs.defaultFinish(c).short}", 12.5f, if (chosen) Palette.CHAMPAGNE else Palette.MUTED, 500).apply {
             setPadding(c.px(2), c.px(8), 0, 0)
         })
         setOnClickListener { onPick(finish) }

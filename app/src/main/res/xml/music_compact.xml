@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Storage · 3×2: Storage used, as a share and in arcs, with space free. A cover-screen cell is about 168 x 237 px. -->
+<!-- Music · Compact (3×2 on the cover screen): artwork, title and play. Resizes from 2×1 upwards. A cover-screen cell is about 168 x 237 px. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="190dp"
+    android:minWidth="192dp"
     android:minHeight="164dp"
     android:minResizeWidth="72dp"
     android:minResizeHeight="72dp"
@@ -9,9 +9,9 @@
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:updatePeriodMillis="1800000"
+    android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/preview_storage"
-    android:description="@string/desc_storage_32"
+    android:previewImage="@drawable/preview_music_compact"
+    android:description="@string/desc_music_32"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

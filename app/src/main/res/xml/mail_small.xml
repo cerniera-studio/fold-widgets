@@ -11,7 +11,7 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/preview_mail"
+    android:previewImage="@drawable/preview_mail_list"
     android:description="@string/desc_mail_43"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

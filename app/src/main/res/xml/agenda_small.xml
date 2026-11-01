@@ -11,7 +11,7 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/preview_agenda"
+    android:previewImage="@drawable/preview_agenda_list"
     android:description="@string/desc_agenda_43"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

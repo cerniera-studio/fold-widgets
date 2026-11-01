@@ -11,7 +11,7 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
-    android:previewLayout="@layout/preview_weather"
+    android:previewImage="@drawable/preview_weather_today"
     android:description="@string/desc_weather_42"
     android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
     android:widgetFeatures="reconfigurable|configuration_optional" />

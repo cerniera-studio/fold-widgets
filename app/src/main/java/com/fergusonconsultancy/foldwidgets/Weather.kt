@@ -254,7 +254,7 @@ object WeatherPainter : Painter {
         }
         fun on(i: WeatherOptions.Item) = WeatherOptions.on(c, id, i)
 
-        if (s.h < 190f && s.w >= s.h * 1.6f) strip(c, canvas, s, fc, place, p, ::on) else column(c, canvas, s, fc, place, p, ::on)
+        if (s.h < 190f && s.w >= s.h * 1.5f) strip(c, canvas, s, fc, place, p, ::on) else column(c, canvas, s, fc, place, p, ::on)
         return Scene(listOf(Hit(all, Weather.openApp(c), "Open Weather")))
     }
 
