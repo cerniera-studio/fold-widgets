@@ -223,8 +223,7 @@ object Mail {
  * "Unread"; nothing else in the header unless something is wrong (31 Oct: "2 accounts" told Mechack
  * what he already knows, and a section label repeating the heading was clutter). Each email: the
  * sender and time, subject, and from four rows tall a line of the opening; no account mark (1 Nov).
- * then sender and time, subject, and from four rows tall a line of the opening. Unread is bright,
- * read is muted with its icon faded, under a quiet READ divider. Type keeps one size at every span.
+ * Unread is bright; read is muted, under a quiet READ divider. Type keeps one size at every span.
  * A tap opens that email itself, never just the inbox, wherever the app allows it.
  */
 object MailPainter : Painter {
