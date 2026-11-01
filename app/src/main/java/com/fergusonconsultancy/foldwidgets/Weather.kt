@@ -391,7 +391,14 @@ object WeatherPainter : Painter {
             }
         }
         if (plan.isEmpty()) return
-        val extra = (room / plan.size).coerceIn(0f, 22f)
+        // Room left once every wanted module is placed (1 Nov: the tallest widget ended in an empty
+        // band). The modules breathe first: hour columns, week rows and detail tiles all grow by
+        // the same proportion, up to a third; only then is any remainder shared between the gaps.
+        val base = plan.sumOf { (m, rows) -> when (m) { Module.HOURS -> 58.0; Module.WEEK -> rows * 26.0; Module.DETAILS -> rows * 46.0 } }.toFloat()
+        val f = (1f + room / base).coerceIn(1f, 1.35f)
+        room -= base * (f - 1f)
+        val hourH = 58f * f; val weekH = 26f * f; val tileH = 46f * f
+        val extra = (room / plan.size).coerceIn(0f, 40f)
         val rule = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline }
         var y = top0
         for ((i, step) in plan.withIndex()) {
@@ -400,19 +407,19 @@ object WeatherPainter : Painter {
             if (i > 0 || divideFirst) { rule.color = s.faint((left + right) / 2, y); cv.drawLine(left, y, right, y, rule) }
             y += 10f
             when (m) {
-                Module.HOURS -> { hours(c, cv, s, fc, left, y, right, y + 58f); y += 58f }
-                Module.WEEK -> { week(c, cv, s, fc, left, y, right, rows); y += rows * 26f }
+                Module.HOURS -> { hours(c, cv, s, fc, left, y, right, y + hourH); y += hourH }
+                Module.WEEK -> { week(c, cv, s, fc, left, y, right, rows, weekH); y += rows * weekH }
                 Module.DETAILS -> {
                     val colW = w / cols
                     val labelP = c.label(s.muted(left + w / 2, y), 1f, 10.5f)
                     val valueP = c.ink(15f, s.ink(left + w / 2, y), 600)
                     for ((k, t) in tiles.take(rows * cols).withIndex()) {
-                        val x = left + colW * (k % cols); val ty = y + 46f * (k / cols)
+                        val x = left + colW * (k % cols); val ty = y + tileH * (k / cols)
                         labelP.color = s.muted(x + colW / 2, ty); valueP.color = s.ink(x + colW / 2, ty + 20f)
                         cv.textTop(fit(t.second.first.uppercase(), labelP, colW - 8f), x, ty, labelP)
                         cv.textTop(fit(t.second.second, valueP, colW - 8f), x, ty + 16f, valueP)
                     }
-                    y += rows * 46f - 6f
+                    y += rows * tileH - 6f
                 }
             }
             y += 4f + extra / 2f
@@ -447,7 +454,7 @@ object WeatherPainter : Painter {
     }
 
     /** The week as rows: day, sky, chance of rain, the low, the day's range against the week's, the high. */
-    private fun week(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, top: Float, right: Float, rows: Int) {
+    private fun week(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, top: Float, right: Float, rows: Int, rowH: Float = 26f) {
         val days = fc.days.drop(1).take(rows)
         if (days.isEmpty()) return
         val weekMin = days.minOf { it.min }; val weekMax = days.maxOf { it.max }
@@ -461,7 +468,7 @@ object WeatherPainter : Painter {
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
         val dayName = java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault())
         for ((i, d) in days.withIndex()) {
-            val mid = top + 26f * i + 11f
+            val mid = top + rowH * i + rowH * 0.42f
             val name = runCatching { dayName.format(fmt.parse(d.date)!!) }.getOrDefault(d.date.takeLast(2))
             dayP.color = s.ink(left + 20f, mid)
             cv.drawText(name, left, mid + capHeight(dayP) / 2, dayP)
