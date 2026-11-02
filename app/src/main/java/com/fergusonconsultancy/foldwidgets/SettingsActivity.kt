@@ -59,6 +59,11 @@ class SettingsActivity : Activity() {
                 if (wall) status(true) else button("Allow") {
                     startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
                 }))
+            // Live mode (2 Nov 2026): the widgets' eyes, as the taskbar has its own
+            val live = LiveService.enabled(this@SettingsActivity)
+            addView(row("Live mode", (if (live) Live.lastNote(this@SettingsActivity)?.let { "$it. " } ?: "" else "") +
+                "Each time the home screen comes to rest, one screenshot shows where the launcher has the wallpaper, and each widget is redrawn against what is really behind it. Never saved, never sent, home screen only.",
+                if (live) status(true) else button("Turn on") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }))
         })
 
         // ---- Mail: opt-in, and only the apps chosen

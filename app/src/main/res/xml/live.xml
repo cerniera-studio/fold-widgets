@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Live mode: watches only for the home screen coming to rest, then takes one screenshot to see
+     where the launcher has the wallpaper behind each widget. Never saved, never sent. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/live_description"
+    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:notificationTimeout="120" />

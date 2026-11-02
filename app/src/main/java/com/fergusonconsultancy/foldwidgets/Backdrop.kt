@@ -156,7 +156,9 @@ object Backdrop {
     fun ground(c: Context, id: Int): Ground {
         val seat = seat(c, id)
         val wall = wallpaper(c, seat)
-        if (seat != null && wall != null) slice(wall, seat)?.let { return it }
+        // Live mode knows where the launcher has the wallpaper on this widget's page, and its tint
+        val live = Live.viewOf(c, id)?.takeIf { seat != null && it.screenW == seat.screenW && it.screenH == seat.screenH && LiveService.enabled(c) }
+        if (seat != null && wall != null) slice(wall, seat, live)?.let { return it }
         return Ground.flat(wallpaperColour(c))
     }
 
@@ -166,12 +168,13 @@ object Backdrop {
      * it, so the screen sees the middle of the image at that scale. Beyond the wallpaper's own
      * edges the outermost pixels repeat.
      */
-    private fun slice(wall: Bitmap, seat: Seat): Ground? {
+    private fun slice(wall: Bitmap, seat: Seat, live: Live.View? = null): Ground? {
         if (seat.width < 2f || seat.height < 2f) return null
         val sw = seat.screenW.toFloat(); val sh = seat.screenH.toFloat()
         val scale = maxOf(sw / wall.width, sh / wall.height)
-        val ox = (wall.width * scale - sw) / 2f
-        val oy = (wall.height * scale - sh) / 2f
+        // Where the launcher really has it, when live mode has seen it; else centred, the usual guess
+        val ox = live?.ox ?: ((wall.width * scale - sw) / 2f)
+        val oy = live?.oy ?: ((wall.height * scale - sh) / 2f)
         val margin = 0.15f * minOf(seat.width, seat.height)     // screen px beyond each edge
         val s = INNER_WIDTH / seat.width                         // output px per screen px
         val outW = ((seat.width + 2 * margin) * s).toInt().coerceAtLeast(8)
@@ -184,6 +187,8 @@ object Backdrop {
         Canvas(out).drawRect(0f, 0f, outW.toFloat(), outH.toFloat(), Paint(Paint.FILTER_BITMAP_FLAG).apply {
             shader = android.graphics.BitmapShader(wall, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
                 .apply { setLocalMatrix(m) }
+            // The launcher's own tint over the wallpaper (One UI dims it in dark mode), as measured
+            live?.gain?.let { g -> colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setScale(g[0], g[1], g[2], 1f) }) }
         })
         return Ground.of(out, (margin * s).toInt(), true)
     }
