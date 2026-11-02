@@ -100,7 +100,7 @@ fun lightOver(lum: Float): Boolean = lum < 0.45f
  * ground, and the ground is judged at its lightest and darkest tenth, not its mean. Measured as
  * WCAG contrast:
  * - ink must reach 7:1 over both (AAA), so the muted ink beneath it can still reach 4.5:1;
- * - if the face the luminance rule picks cannot, its opposite is tried;
+ * - the ink is chosen once for the whole widget, never zone by zone (see [legibleFaces]);
  * - if neither can, the glass thickens and sheds the ground's tint, step by step, only as far as
  *   it must, so a finish keeps as much of its character as legibility allows;
  * - the finish's light (day headings) is drawn towards the ink until it reaches 4.5:1;
@@ -108,25 +108,47 @@ fun lightOver(lum: Float): Boolean = lum < 0.45f
  * [throughBlur]: Vetro shows the ground blurred, so its detail is gone and the mean is what lies
  * behind the type.
  */
-fun legibleFace(finish: Finish, mean: Int, bright: Int, dark: Int, throughBlur: Boolean): Face {
-    val hi = if (throughBlur) mean else bright
-    val lo = if (throughBlur) mean else dark
+fun legibleFace(finish: Finish, mean: Int, hi: Int, lo: Int, light: Boolean): Pair<Face, Int> {
     fun over(fill: Int, g: Int) = blend(g, fill or 0xFF000000.toInt(), Color.alpha(fill) / 255f)
     fun score(f: Face) = minOf(contrast(f.ink, over(f.fill, hi)), contrast(f.ink, over(f.fill, lo)))
-    if (!finish.adaptive) return finish(Face(finish.fill, finish.ink, finish.edge, finish.indicator), hi, lo, ::over)
-    val first = faceFor(finish, mean, lightOver(lum(mean)))
-    val other = faceFor(finish, mean, !lightOver(lum(mean)))
-    var face = if (score(first) >= INK_MIN || score(first) >= score(other)) first else other
+    if (!finish.adaptive) return finish(Face(finish.fill, finish.ink, finish.edge, finish.indicator), hi, lo, ::over) to 0
+    var face = faceFor(finish, mean, light)
     var step = 0
-    while (score(face) < INK_MIN && step < 14) {
+    while (score(face) < INK_MIN && step < 18) {
         // Thicken the glass and draw it towards its own pole: ivory under dark ink, iron under light
         val pole = if (lum(face.ink) < 0.5f) 0xF6F3EC else 0x0E1110
-        val a = (Color.alpha(face.fill) + 10).coerceAtMost(0xF6)
+        val a = (Color.alpha(face.fill) + 10).coerceAtMost(0xF8)
         face = face.copy(fill = (a shl 24) or (blend(face.fill or 0xFF000000.toInt(), pole or 0xFF000000.toInt(), 0.14f) and 0xFFFFFF))
         step++
     }
-    return finish(face, hi, lo, ::over)
+    return finish(face, hi, lo, ::over) to (if (score(face) < INK_MIN) 1000 else step)
 }
+
+/**
+ * The faces of one widget (2 Nov 2026). The first rule judged each zone alone, so a widget over a
+ * hard light stripe turned dark-inked in one zone and light-inked in the next, and a line of type
+ * running across both went dark on dark for half its length (the music title over a wallpaper
+ * with a pale band). Type runs across zones; the ink cannot change under it.
+ *
+ * So: one ink for the whole widget, the one that costs the glass least; and every zone is judged
+ * against the lightest and darkest the ground reaches anywhere behind the widget, not only under
+ * itself, because the launcher may scroll the wallpaper a little from where it was read. Each
+ * zone's glass then thickens only as far as that one ink needs. The widget reads as one piece of
+ * glass with one ink, as the taskbar does.
+ */
+fun legibleFaces(finish: Finish, ground: Ground, throughBlur: Boolean): Array<Face> {
+    val zones = ground.zones
+    val hi = (if (throughBlur) zones else ground.bright).maxBy { relLum(it) }
+    val lo = (if (throughBlur) zones else ground.dark).minBy { relLum(it) }
+    val avg = blendAll(zones)
+    val usual = lightOver(lum(avg))
+    val a = zones.map { legibleFace(finish, it, hi, lo, usual) }
+    val b = zones.map { legibleFace(finish, it, hi, lo, !usual) }
+    val pick = if (b.sumOf { it.second } < a.sumOf { it.second }) b else a
+    return pick.map { it.first }.toTypedArray()
+}
+
+private fun blendAll(cs: IntArray): Int = Color.rgb(cs.sumOf { Color.red(it) } / cs.size, cs.sumOf { Color.green(it) } / cs.size, cs.sumOf { Color.blue(it) } / cs.size)
 
 private const val INK_MIN = 7f
 private const val SECONDARY_MIN = 4.5f

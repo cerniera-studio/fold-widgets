@@ -23,9 +23,7 @@ import android.graphics.Shader
  */
 class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float, val radius: Float, val hairline: Float) {
 
-    private val faces: Array<Face> = Array(Ground.COLS * Ground.ROWS) { z ->
-        legibleFace(finish, ground.zones[z], ground.bright[z], ground.dark[z], throughBlur = finish == Finish.VETRO && ground.seated && ground.frost != null)
-    }
+    private val faces: Array<Face> = legibleFaces(finish, ground, throughBlur = finish == Finish.VETRO && ground.seated && ground.frost != null)
 
     /** The face under a point, as fractions of the widget's width and height. */
     fun faceAt(fx: Float, fy: Float): Face {
