@@ -55,15 +55,31 @@ class TapActivity : Activity() {
     }
 
     /**
-     * Samsung Weather, by whichever way in exists now. If it offers none, or refuses, say so and
+     * The weather app chosen in settings (Samsung Weather until one is chosen). Samsung Weather by
+     * whichever way in exists now. If it offers none, or refuses, say so and
      * show the weather in Google instead: a tap must never do nothing (31 Oct).
      */
     private fun weather() {
+        when (val choice = Weather.opener(this)) {
+            Weather.GOOGLE -> { google(); return }
+            Weather.SAMSUNG_WEATHER -> {}
+            else -> {
+                val app = packageManager.getLaunchIntentForPackage(choice)
+                if (app != null && runCatching { startActivity(app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+                // The chosen app has gone: say so, and fall through to Samsung Weather
+                android.widget.Toast.makeText(applicationContext, "${Weather.openerName(this, choice)} can't be opened, so Samsung Weather opened instead. Choose again in Fold Widgets' settings.",
+                    android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
         val samsung = Weather.launchIntent(this)
         if (samsung != null && runCatching { startActivity(samsung.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
         android.widget.Toast.makeText(applicationContext,
             "Samsung Weather can't be opened by other apps yet. In Samsung Weather's settings, turn on adding it to the Apps screen.",
             android.widget.Toast.LENGTH_LONG).show()
+        google()
+    }
+
+    private fun google() {
         val google = Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, "weather")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(google) }

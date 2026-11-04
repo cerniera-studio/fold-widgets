@@ -19,6 +19,8 @@
     <queries>
         <!-- Samsung Weather, opened by the weather widget -->
         <package android:name="com.sec.android.daemonapp" />
+        <!-- Cielo, offered as what the weather widget opens -->
+        <package android:name="com.fergusonconsultancy.cielo" />
         <!-- The email apps the mail widget can read and open -->
         <package android:name="com.microsoft.office.outlook" />
         <package android:name="com.google.android.gm" />

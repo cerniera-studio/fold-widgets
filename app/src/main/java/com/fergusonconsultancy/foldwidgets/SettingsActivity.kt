@@ -216,6 +216,45 @@ class SettingsActivity : Activity() {
             addView(results)
         })
 
+        // ---- What a tap opens (4 Nov): any weather app, offered only if it is on the phone
+        column.addView(card().apply {
+            val me = this@SettingsActivity
+            val choice = Weather.opener(me)
+            addView(row("A tap opens", Weather.openerName(me), null))
+            val fixed = listOfNotNull(
+                (Weather.CIELO to "Cielo").takeIf { Weather.installed(me, Weather.CIELO) },
+                (Weather.SAMSUNG_WEATHER to "Samsung").takeIf { Weather.installed(me, Weather.SAMSUNG_WEATHER) },
+                Weather.GOOGLE to "Google",
+            )
+            val other = choice !in fixed.map { it.first }
+            val apps = LinearLayout(me).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+            addView(LinearLayout(me).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, 0, 0, px(14))
+                (fixed + ("" to "Other")).forEachIndexed { i, (pkg, name) ->
+                    val on = if (pkg.isEmpty()) other else pkg == choice
+                    addView(button(name, primary = on) {
+                        if (pkg.isEmpty()) apps.visibility = if (apps.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                        else { Weather.setOpener(me, pkg); build(); Widgets.later { Widgets.renderAll(me, Kind.WEATHER) } }
+                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
+                }
+            })
+            // Other: every app with a launcher entry, by name
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            @Suppress("DEPRECATION")
+            packageManager.queryIntentActivities(launcher, 0)
+                .map { it.activityInfo.packageName }.distinct()
+                .filter { it != packageName && it !in fixed.map { f -> f.first } }
+                .map { it to Media.label(me, it) }.sortedBy { it.second.lowercase() }
+                .forEach { (pkg, name) ->
+                    apps.addView(label(name, 15f, if (pkg == choice) Palette.CHAMPAGNE else Palette.IVORY, 500).apply {
+                        setPadding(0, px(12), 0, px(12))
+                        setOnClickListener { Weather.setOpener(me, pkg); build(); Widgets.later { Widgets.renderAll(me, Kind.WEATHER) } }
+                    })
+                }
+            addView(apps)
+        })
+
         // ---- Glass
         column.addView(eyebrow("Glass"))
         column.addView(card().apply {

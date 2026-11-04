@@ -177,6 +177,21 @@ object Weather {
 
     /** Samsung Weather's package (verified against its APK listings). */
     const val SAMSUNG_WEATHER = "com.sec.android.daemonapp"
+    const val CIELO = "com.fergusonconsultancy.cielo"
+    /** Not an app: the weather in Google search. */
+    const val GOOGLE = "google"
+
+    /** What a tap on a weather widget opens: an app's package, or [GOOGLE]. Samsung Weather until chosen. */
+    fun opener(c: Context): String = Prefs.of(c).getString("weather_app", null) ?: SAMSUNG_WEATHER
+    fun setOpener(c: Context, v: String) = Prefs.of(c).edit().putString("weather_app", v).apply()
+
+    fun openerName(c: Context, v: String = opener(c)): String = when (v) {
+        GOOGLE -> "Google"
+        SAMSUNG_WEATHER -> "Samsung Weather"
+        else -> Media.label(c, v)
+    }
+
+    fun installed(c: Context, pkg: String) = runCatching { c.packageManager.getApplicationInfo(pkg, 0); true }.getOrDefault(false)
 
     /**
      * A tap opens Samsung Weather. Which way in exists is decided at the moment of the tap, not when
@@ -260,7 +275,7 @@ object WeatherPainter : Painter {
         fun on(i: WeatherOptions.Item) = WeatherOptions.on(c, id, i)
 
         if (s.h < 190f && s.w >= s.h * 1.5f) strip(c, canvas, s, fc, place, p, ::on, Widgets.forecast(c, id)) else column(c, canvas, s, fc, place, p, ::on)
-        return Scene(listOf(Hit(all, Weather.openApp(c), "Open Weather")))
+        return Scene(listOf(Hit(all, Weather.openApp(c), "Open " + Weather.openerName(c))))
     }
 
     // ---- A short, wide widget: the minimum in a row, then the hours ----------------------------
