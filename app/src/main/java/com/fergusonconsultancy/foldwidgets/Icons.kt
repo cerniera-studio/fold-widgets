@@ -10,9 +10,8 @@ import org.xmlpull.v1.XmlPullParser
 
 /**
  * App icons as the launcher shows them. If an icon pack is in use (Smart Launcher reads the same
- * ADW-style packs as other launchers), the widget takes each icon from that pack, so the Gmail and
- * Outlook marks in the mail widget, and the player's mark in the music widget, are the very icons on
- * the home screen. Without a pack, the app's own icon. Drawn as the drawable itself, never a
+ * ADW-style packs as other launchers), the widget takes each icon from that pack, so the player's mark
+ * in the music widget is the very icon on the home screen. Without a pack, the app's own icon. Drawn as the drawable itself, never a
  * resampled bitmap, so it stays sharp at any size.
  */
 object Icons {

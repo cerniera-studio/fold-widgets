@@ -209,6 +209,21 @@ object Prefs {
         of(c).all.keys.filter { it.startsWith("finish_") }.forEach { remove(it) }
     }.apply()
 
+    /**
+     * The mail widget was retired on 5 Nov 2026. Its inbox addresses, sealed passwords and tokens,
+     * kept emails and tap log are wiped once from this phone, with the key that sealed them.
+     */
+    fun retireMail(c: Context) {
+        val p = of(c)
+        if (p.getBoolean("mail_retired", false)) return
+        val gone = listOf("vault_", "mb_", "ms_", "mail_", "gmail_ids_error", "probe_taps")
+        p.edit().apply {
+            p.all.keys.filter { k -> gone.any { k.startsWith(it) } }.forEach { remove(it) }
+            putBoolean("mail_retired", true)
+        }.apply()
+        runCatching { java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry("foldwidgets_mail") }
+    }
+
     fun forget(c: Context, id: Int) = of(c).edit().remove("finish_$id").remove("seat_$id").apply()
 
     /** Corner radius in dp. 24 matches Android's own widget corners. */

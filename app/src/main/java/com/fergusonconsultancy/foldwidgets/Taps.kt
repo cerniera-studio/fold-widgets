@@ -30,26 +30,19 @@ class TapActivity : Activity() {
         val pending = intent.getParcelableExtra<PendingIntent>(Widgets.EXTRA_PENDING)
         @Suppress("DEPRECATION")
         val target = intent.getParcelableExtra<Intent>(Widgets.EXTRA_TARGET)
-        // Opening an email: look at the inboxes again while it is likely being read, deleted or archived
-        val opened = pending?.creatorPackage ?: target?.`package` ?: target?.component?.packageName
-        if (opened != null && opened in Mail.APPS.keys && Mailbox.connected(this)) Mailbox.followUp(applicationContext)
         if (pending != null) {
             // This activity is in front, so it may start the other app's screen on its behalf
             val options = ActivityOptions.makeBasic()
             if (Build.VERSION.SDK_INT >= 34) options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
             val sent = runCatching { pending.send(this, 0, null, null, null, null, options.toBundle()) }
-            if (opened in Mail.APPS.keys) Probe.note(this, "Notification link [${target?.getStringExtra(Probe.EXTRA_SOURCE) ?: "?"}]", sent.exceptionOrNull())
             if (sent.isSuccess) return
         }
         if (target?.getStringExtra(EXTRA_RESOLVE) == RESOLVE_WEATHER) { weather(); return }
-        // The exact thing first (an email in its app), then the app itself if that cannot be opened
+        // The exact thing first, then the app itself if that cannot be opened
         @Suppress("DEPRECATION")
         val fallback = intent.getParcelableExtra<Intent>(Widgets.EXTRA_FALLBACK)
         for (each in listOfNotNull(target, fallback)) {
             val started = runCatching { startActivity(each.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            // Which way an email tap actually went, so it can be read back from settings
-            if (opened in Mail.APPS.keys) Probe.note(this, (if (each.data != null) "Message link ${each.data?.scheme}://${each.data?.host}${each.data?.path}" else "Outlook itself (fallback)") +
-                " [${each.getStringExtra(Probe.EXTRA_SOURCE) ?: "?"}]" + (if (pending == null) ", no notification link for this email (${Mail.keptCount()} kept)" else ""), started.exceptionOrNull())
             if (started.isSuccess) return
         }
     }

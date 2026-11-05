@@ -9,7 +9,7 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 
 /**
- * The agenda's scrolling list (1 Nov: the two weeks ahead, scrolled through, as the mail list is).
+ * The agenda's scrolling list (1 Nov: the two weeks ahead, scrolled through).
  * Each day heading and each event is a row drawn to its exact pixels, in the pack's type; a tap on
  * an event opens it in the calendar.
  */
@@ -40,7 +40,7 @@ class AgendaRows : RemoteViewsService() {
         override fun getLoadingView(): RemoteViews? = null
 
         override fun getViewAt(position: Int): RemoteViews {
-            val rv = RemoteViews(c.packageName, R.layout.mail_row)
+            val rv = RemoteViews(c.packageName, R.layout.list_row)
             val r = rows.getOrNull(position) ?: return rv
             val frame = Widgets.frameOf(c, id)
             val (d, px, _) = Widgets.drawn(frame)
