@@ -71,7 +71,7 @@ fun Context.heading(colour: Int, k: Float = 1f, size: Float = 15f) = ink(size * 
 /** The quiet title of an empty or setup state: a heading, a step larger. */
 fun Context.statement(colour: Int, k: Float = 1f) = ink(17f * k, colour, 600)
 
-/** Secondary text (times, artist, a line of an email's opening): 12.5 at 500, set in the muted ink. */
+/** Secondary text (times, artist, a place): 12.5 at 500, set in the muted ink. */
 fun Context.meta(colour: Int, k: Float = 1f, size: Float = 12.5f) = ink(size * k, colour, 500)
 
 /** Small tracked capitals: day headings, section dividers, the player's name, detail labels. */

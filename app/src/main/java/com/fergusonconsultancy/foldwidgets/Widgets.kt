@@ -33,7 +33,7 @@ class Hit(val rect: RectF, val act: Act, val label: String)
 class Line(val rect: RectF, val value: Float, val track: Int, val fill: Int)
 
 /** What a painter leaves besides the picture: where touches go, and the line if there is one. */
-/** [listTop]: where a scrolling list of rows begins, in dp, for widgets whose content scrolls (mail). */
+/** [listTop]: where a scrolling list of rows begins, in dp, for widgets whose content scrolls (agenda). */
 class Scene(val hits: List<Hit>, val line: Line? = null, val listTop: Float = -1f)
 
 /** Paints one kind of widget on a canvas measured in dp, over its finish. */
@@ -42,17 +42,17 @@ interface Painter {
 }
 
 enum class Kind(val painter: Painter) {
-    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), MAIL(MailPainter);
+    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter);
 
     /**
-     * How much larger a list widget's whole composition is drawn (1 Nov). Agenda and mail keep one
+     * How much larger the agenda's whole composition is drawn (1 Nov). The agenda keeps one
      * type scale on the cover screen, where a larger widget shows more rows; on the main screen
      * widgets are two to three times the size, and the same small type sat in wide empty margins.
      * So from 300 dp in both directions the composition grows with the widget, up to half as large
      * again. Music, weather and month scale within their own layouts.
      */
     fun scaleFor(w: Float, h: Float): Float = when (this) {
-        AGENDA, MAIL -> minOf(w / 300f, h / 300f).coerceIn(1f, 1.5f)
+        AGENDA -> minOf(w / 300f, h / 300f).coerceIn(1f, 1.5f)
         else -> 1f
     }
 }
@@ -84,8 +84,6 @@ class AgendaSmall : Widget() { override val kind = Kind.AGENDA }
 class AgendaLarge : Widget() { override val kind = Kind.AGENDA }
 class MonthSmall : Widget() { override val kind = Kind.MONTH }
 class MonthLarge : Widget() { override val kind = Kind.MONTH }
-class MailSmall : Widget() { override val kind = Kind.MAIL }
-class MailLarge : Widget() { override val kind = Kind.MAIL }
 class WeatherSmall : Widget() {
     override val kind = Kind.WEATHER
     override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) { super.onUpdate(c, m, ids); RefreshJob.schedule(c) }
@@ -102,7 +100,6 @@ object Widgets {
      */
     fun variant(c: Context, id: Int): String =
         runCatching { AppWidgetManager.getInstance(c).getAppWidgetInfo(id)?.provider?.className?.substringAfterLast('.') }.getOrNull().orEmpty()
-    fun previews(c: Context, id: Int) = variant(c, id) == "MailLarge"
     fun detailed(c: Context, id: Int) = variant(c, id) == "AgendaLarge"
     fun titled(c: Context, id: Int) = variant(c, id) == "MonthLarge"
     fun forecast(c: Context, id: Int) = variant(c, id) != "WeatherSmall"
@@ -119,7 +116,6 @@ object Widgets {
         Kind.AGENDA to listOf(AgendaSmall::class.java, AgendaLarge::class.java),
         Kind.WEATHER to listOf(WeatherSmall::class.java, WeatherLarge::class.java),
         Kind.MONTH to listOf(MonthSmall::class.java, MonthLarge::class.java),
-        Kind.MAIL to listOf(MailSmall::class.java, MailLarge::class.java),
     )
 
     /** One worker, so redraws never overlap and never block the main thread. */
@@ -211,9 +207,9 @@ object Widgets {
         val listed = scene.listTop >= 0f
         val rv = RemoteViews(c.packageName, if (listed) R.layout.widget_list else R.layout.widget)
         if (listed) {
-            // A scrolling list of rows over the picture, filled by MailRows, each row its own picture
+            // A scrolling list of rows over the picture, filled by AgendaRows, each row its own picture
             place(rv, R.id.list, RectF(0f, scene.listTop, size.width, size.height - 6f))
-            rv.setRemoteAdapter(R.id.list, Intent(c, if (kind == Kind.AGENDA) AgendaRows::class.java else MailRows::class.java)
+            rv.setRemoteAdapter(R.id.list, Intent(c, AgendaRows::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse("foldwidgets://rows/$id")))
             rv.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(c, id * 32 + 31,
                 Intent(c, TapActivity::class.java).setData(Uri.parse("foldwidgets://row/$id"))

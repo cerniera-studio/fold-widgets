@@ -21,10 +21,6 @@
         <package android:name="com.sec.android.daemonapp" />
         <!-- Cielo, offered as what the weather widget opens -->
         <package android:name="com.fergusonconsultancy.cielo" />
-        <!-- The email apps the mail widget can read and open -->
-        <package android:name="com.microsoft.office.outlook" />
-        <package android:name="com.google.android.gm" />
-        <package android:name="com.samsung.android.email.provider" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -37,11 +33,6 @@
         <intent><action android:name="org.adw.launcher.THEMES" /></intent>
         <intent><action android:name="com.novalauncher.THEME" /></intent>
         <intent><action android:name="com.gau.go.launcherex.theme" /></intent>
-        <!-- Outlook's link to a single email -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="ms-outlook" />
-        </intent>
     </queries>
 
     <application
@@ -80,22 +71,6 @@
             android:taskAffinity=""
             android:theme="@style/Pass" />
 
-        <!-- Microsoft's sign-in page returns here with a one-time code (Outlook.com inbox) -->
-        <activity
-            android:name=".AuthActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:launchMode="singleTask"
-            android:theme="@style/Pass">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="foldwidgets" android:host="auth" />
-            </intent-filter>
-        </activity>
-
         <!-- Taps that act in place: play, skip, refresh -->
         <receiver
             android:name=".TapReceiver"
@@ -122,7 +97,6 @@
             </intent-filter>
         </service>
 
-        <!-- The mail widget's scrolling list: rows handed to the launcher one at a time -->
         <service
             android:name=".LiveService"
             android:exported="true"
@@ -132,13 +106,9 @@
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/live" />
         </service>
 
+        <!-- The agenda's scrolling list: rows handed to the launcher one at a time -->
         <service
             android:name=".AgendaRows"
-            android:exported="false"
-            android:permission="android.permission.BIND_REMOTEVIEWS" />
-
-        <service
-            android:name=".MailRows"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 
@@ -182,14 +152,6 @@
         <receiver android:name=".MonthLarge" android:exported="false" android:label="Month · Full">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_large" />
-        </receiver>
-        <receiver android:name=".MailSmall" android:exported="false" android:label="Mail · List">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/mail_small" />
-        </receiver>
-        <receiver android:name=".MailLarge" android:exported="false" android:label="Mail · With previews">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/mail_large" />
         </receiver>
     </application>
 </manifest>

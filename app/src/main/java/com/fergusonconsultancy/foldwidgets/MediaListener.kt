@@ -18,7 +18,7 @@ import android.os.PowerManager
  * The app's one long-lived part. Android keeps a notification listener running, and only a
  * notification listener may watch other apps' media sessions. It watches the players, moves the
  * progress line while the screen is on, and redraws every widget when the wallpaper changes. It
- * reads notifications only if Mail is turned on, and then only those of the email apps chosen.
+ * reads no notifications.
  */
 class MediaListener : android.service.notification.NotificationListenerService() {
 
@@ -43,16 +43,12 @@ class MediaListener : android.service.notification.NotificationListenerService()
 
     private val onScreen = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (i.action == Intent.ACTION_SCREEN_ON) { soon(); main.removeCallbacks(mailPoll); main.post(mailPoll) }
-            else { main.removeCallbacks(tick); main.removeCallbacks(mailPoll) }
+            if (i.action == Intent.ACTION_SCREEN_ON) soon() else main.removeCallbacks(tick)
         }
     }
 
     override fun onListenerConnected() {
         instance = this
-        Probe.note(this, "Widget service started (kept links: ${Mail.keptCount()})", null)
-        Widgets.later { Mail.remember(this) }
-        mailSoon()
         val msm = getSystemService(MediaSessionManager::class.java)
         sessions = msm
         runCatching {
@@ -62,7 +58,6 @@ class MediaListener : android.service.notification.NotificationListenerService()
         runCatching { WallpaperManager.getInstance(this).addOnColorsChangedListener(onWallpaper, main) }
         registerReceiver(onScreen, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) }, Context.RECEIVER_NOT_EXPORTED)
         soon()
-        main.post(mailPoll)
     }
 
     override fun onListenerDisconnected() {
@@ -92,40 +87,8 @@ class MediaListener : android.service.notification.NotificationListenerService()
 
     private fun soon() { main.removeCallbacks(redraw); main.postDelayed(redraw, 160) }
 
-    // ---- Mail: redrawn when an email app's notifications change --------------------------------
-    private val mailRedraw = Runnable { Widgets.later { Widgets.renderAll(this, Kind.MAIL) } }
-    private fun mailSoon() { main.removeCallbacks(mailRedraw); main.postDelayed(mailRedraw, 400) }
-
-    private fun isMail(sbn: android.service.notification.StatusBarNotification?) =
-        sbn != null && (Mail.enabled(this) || Mailbox.connected(this)) && sbn.packageName in Mail.apps(this)
-
-    /** An email app's notifications changed: something arrived, or was dealt with in the app. */
-    private fun mailboxNudge(sbn: android.service.notification.StatusBarNotification?) {
-        if (sbn != null && sbn.packageName in Mail.APPS.keys && Mailbox.connected(this)) Mailbox.syncSoon(this, 4_000L)
-    }
-
-    override fun onNotificationPosted(sbn: android.service.notification.StatusBarNotification?) {
-        if (isMail(sbn)) { Widgets.later { Mail.remember(this) }; mailSoon() }
-        mailboxNudge(sbn)
-    }
-    override fun onNotificationRemoved(sbn: android.service.notification.StatusBarNotification?) {
-        if (isMail(sbn)) mailSoon()
-        mailboxNudge(sbn)
-    }
-
-    /** While the screen is on, the inboxes are read every three minutes; on waking, if older than a minute. */
-    private var lastPoll = 0L
-    private val mailPoll = object : Runnable {
-        override fun run() {
-            if (!Mailbox.connected(this@MediaListener) || Widgets.ids(this@MediaListener, Kind.MAIL).isEmpty()) return
-            if (!getSystemService(PowerManager::class.java).isInteractive) return
-            if (System.currentTimeMillis() - lastPoll > 60_000L) { lastPoll = System.currentTimeMillis(); Mailbox.syncSoon(this@MediaListener) }
-            main.postDelayed(this, 180_000L)
-        }
-    }
-
     companion object {
-        /** The running listener, from which the mail widget reads the notifications on screen. */
+        /** The running listener. */
         @Volatile var instance: MediaListener? = null
     }
 

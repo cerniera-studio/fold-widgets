@@ -6,8 +6,8 @@ import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.text.InputType
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -49,7 +49,7 @@ class SettingsActivity : Activity() {
         column.addView(eyebrow("Access"))
         column.addView(card().apply {
             val music = Media.allowed(this@SettingsActivity)
-            addView(row("Music and mail", "Follows Spotify, Poweramp or any player. Notifications are read only for Mail, if you turn it on.",
+            addView(row("Music", "Follows Spotify, Poweramp or any player. Android files this under notification access; no notification is read.",
                 if (music) status(true) else button("Allow") { startActivity(Media.accessIntent(this@SettingsActivity)) }))
             val cal = Agenda.allowed(this@SettingsActivity)
             addView(row("Calendar", "The agenda reads your calendars on the phone",
@@ -64,97 +64,6 @@ class SettingsActivity : Activity() {
             addView(row("Live mode", (if (live) Live.lastNote(this@SettingsActivity)?.let { "$it. " } ?: "" else "") +
                 "Each time the home screen comes to rest, one screenshot shows where the launcher has the wallpaper, and each widget is redrawn against what is really behind it. Never saved, never sent, home screen only.",
                 if (live) status(true) else button("Turn on") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }))
-        })
-
-        // ---- Mail: opt-in, and only the apps chosen
-        column.addView(eyebrow("Mail"))
-        column.addView(card().apply {
-            val on = Mail.enabled(this@SettingsActivity)
-            addView(row("Show mail", "Reads the notifications of the email apps below, and nothing else. Each email is remembered for a week on this phone: new mail bright, mail you have opened dimmed. Nothing is sent anywhere.",
-                button(if (on) "Turn off" else "Turn on", primary = !on) {
-                    Mail.setEnabled(this@SettingsActivity, !on)
-                    if (!on && !Media.allowed(this@SettingsActivity)) startActivity(Media.accessIntent(this@SettingsActivity))
-                    build(); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
-                }))
-            if (on) addView(row("Clear the list", "Forget every email the widget has kept", button("Clear", primary = false) {
-                Mail.clear(this@SettingsActivity); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
-            }))
-            if (on) Mail.APPS.forEach { (pkg, name) ->
-                if (!Mail.installed(this@SettingsActivity, pkg)) return@forEach
-                val read = pkg in Mail.apps(this@SettingsActivity)
-                addView(row(name, if (read) "Read" else "Not read", button(if (read) "Stop" else "Read", primary = false) {
-                    Mail.setApp(this@SettingsActivity, pkg, !read); build(); Widgets.later { Widgets.renderAll(this@SettingsActivity, Kind.MAIL) }
-                }))
-            }
-        })
-
-        // ---- Inboxes: the widget mirrors Gmail and Outlook themselves, so deleted mail leaves it
-        column.addView(eyebrow("Inboxes"))
-        column.addView(card().apply {
-            addView(label("Connect an inbox and the widget shows what the inbox shows: unread and read, and nothing you have deleted or archived. Read-only: nothing is ever marked read, moved or sent. Kept on this phone only.",
-                13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
-
-            // Gmail: address and app password
-            val gmail = Mailbox.address(this@SettingsActivity, Mailbox.GMAIL)
-            if (gmail != null) {
-                addView(row("Gmail", Mailbox.problem(this@SettingsActivity, Mailbox.GMAIL) ?: gmail, button("Disconnect", primary = false) {
-                    Mailbox.disconnect(this@SettingsActivity, Mailbox.GMAIL); build()
-                }))
-            } else {
-                addView(row("Gmail", "Needs an app password: a 16-letter key Google makes for one app, which you can revoke at any time. Your Google password is never used.",
-                    button("Get one", primary = false) { open("https://myaccount.google.com/apppasswords") }))
-                val addr = field("Gmail address", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
-                val pw = field("App password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-                addView(addr, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
-                addView(pw, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
-                addView(button("Connect Gmail") {
-                    val a = addr.text.toString(); val k = pw.text.toString()
-                    toast("Checking with Google…")
-                    Thread {
-                        val failed = Mailbox.connectGmail(applicationContext, a, k)
-                        runOnUiThread { toast(failed ?: "Gmail connected"); if (failed == null) build() }
-                    }.start()
-                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
-            }
-
-            // Outlook.com: Microsoft sign-in, with the app's own registration
-            val outlook = Mailbox.address(this@SettingsActivity, Mailbox.OUTLOOK)
-            if (outlook != null) {
-                addView(row("Outlook", Mailbox.problem(this@SettingsActivity, Mailbox.OUTLOOK) ?: outlook, button("Disconnect", primary = false) {
-                    Mailbox.disconnect(this@SettingsActivity, Mailbox.OUTLOOK); build()
-                }))
-                if (Mailbox.problem(this@SettingsActivity, Mailbox.OUTLOOK) != null) addView(button("Sign in again") { signInMicrosoft() },
-                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
-            } else {
-                addView(row("Outlook", "Signs in on Microsoft's own page. Microsoft requires every app to be registered: paste this app's ID from its registration below.", null))
-                val id = field("Application (client) ID", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS).apply {
-                    setText(Microsoft.clientId(this@SettingsActivity).orEmpty())
-                }
-                addView(id, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
-                addView(button("Sign in with Microsoft") {
-                    val v = id.text.toString().trim()
-                    if (!Regex("[0-9a-fA-F-]{36}").matches(v)) { toast("The ID looks like 1a2b3c4d-… with 36 characters"); return@button }
-                    Microsoft.setClientId(this@SettingsActivity, v)
-                    signInMicrosoft()
-                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
-            }
-
-            if (gmail != null || outlook != null) {
-                // Googlemail link test (1 Nov): does Outlook accept Gmail's own ids for a Gmail email?
-                addView(row("Tap log", "What happened when you tapped emails, and when Outlook's links were kept. No email content.",
-                    button("Share", primary = false) {
-                        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_TEXT, "Fold Widgets tap log\n" + Probe.taps(this@SettingsActivity).ifBlank { "(empty)" }), "Share the tap log"))
-                    }))
-                val main = Mailbox.mainOnly(this@SettingsActivity)
-                addView(row("Primary and Focused only", if (main) "As the apps notify: Gmail's Primary tab, Outlook's Focused inbox" else "Everything in both inboxes, promotions included",
-                    button(if (main) "Show all" else "Main only", primary = false) {
-                        Mailbox.setMainOnly(this@SettingsActivity, !main); build()
-                    }))
-                addView(row("Look now", "The widget looks every few minutes while the screen is on", button("Refresh", primary = false) {
-                    Thread { Mailbox.sync(applicationContext, force = true); runOnUiThread { toast("Updated"); build() } }.start()
-                }))
-            }
         })
 
         // ---- Icons: the marks in the widgets come from the home screen's icon pack
@@ -177,10 +86,10 @@ class SettingsActivity : Activity() {
         // ---- Finish
         column.addView(eyebrow("Finish"))
         column.addView(finishGrid(Finish.entries.toList(), { it == Prefs.defaultFinish(this) }) { f ->
-            if (f != null) Prefs.setDefaultFinish(this, f)
+            if (f != null) { Prefs.setDefaultFinish(this, f); Prefs.followAll(this) }
             Widgets.later { Widgets.renderAll(this) }
         })
-        column.addView(label("Every widget wears this unless it has its own. To give one widget its own finish, hold it on the home screen and open its settings.",
+        column.addView(label("Choosing here dresses every widget. To give one widget its own finish afterwards, hold it on the home screen and open its settings.",
             13f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), 0) })
 
         // ---- Corners
@@ -293,25 +202,6 @@ class SettingsActivity : Activity() {
         column.addView(label(NOTES, 13.5f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), 0) })
     }
 
-    private fun field(hintText: String, type: Int) = EditText(this).apply {
-        hint = hintText
-        setHintTextColor(Palette.MUTED); setTextColor(Palette.IVORY); textSize = 15f
-        typeface = Type.sans(context, 400)
-        inputType = type
-        isSingleLine = true
-        background = rounded(Palette.RAISED, px(14).toFloat(), Palette.HAIRLINE, px(1))
-        setPadding(px(14), px(12), px(14), px(12))
-    }
-
-    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
-
-    private fun open(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-
-    private fun signInMicrosoft() {
-        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Microsoft.signInUri(this))) }
-            .onFailure { toast("No browser could open Microsoft's sign-in page") }
-    }
-
     private fun search(name: String, into: LinearLayout) {
         if (name.isBlank()) return
         into.removeAllViews()
@@ -410,7 +300,7 @@ class SettingsActivity : Activity() {
             "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Both carry one highlight at the upper left, " +
             "cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat, and its size is the launcher's guess: one tap measures it.\n\n" +
             "As a widget gets smaller, things fall away in a fixed order until only the vital thing is left: the play disc, today's date, " +
-            "the temperature, the share of storage used. Music has one control, play and pause; any other tap opens the player.\n\n" +
+            "the temperature. Music has one control, play and pause; any other tap opens the player.\n\n" +
             "The music widget follows the player Android marks as active. Playing beats paused; among equals, the most recent wins."
     }
 }

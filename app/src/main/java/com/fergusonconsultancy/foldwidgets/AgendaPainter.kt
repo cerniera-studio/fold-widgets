@@ -154,7 +154,7 @@ object AgendaPainter : Painter {
             return Scene(hits)
         }
 
-        // The days ahead scroll (1 Nov), as the mail list does: the date stays in the picture, and
+        // The days ahead scroll (1 Nov): the date stays in the picture, and
         // each day heading and event is a row of its own in a scrolling list laid over the glass
         if (!bare) return Scene(hits, listTop = y - 4f)
 
