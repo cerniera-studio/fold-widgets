@@ -356,13 +356,18 @@ object MusicPainter : Painter {
 
     private fun artistOf(c: Context, np: NowPlaying?): String {
         if (np != null) return np.artist.ifEmpty { np.album.ifEmpty { np.app } }
-        val last = Media.lastPlayer(c)?.let { Media.label(c, it) }
-        return if (last != null) "Play to resume $last" else "Start any player"
+        val idle = Media.idlePlayer(c)
+        val name = idle?.let { Media.label(c, it) }
+        return when {
+            name == null -> "Start any player"
+            idle == Media.playWith(c) && idle != Media.lastPlayer(c) -> "Play to start $name"
+            else -> "Play to resume $name"
+        }
     }
 
     /** The player's icon and name, small and tracked: it says where the music comes from. */
     private fun eyebrow(c: Context, cv: Canvas, x: Float, top: Float, width: Float, size: Float, np: NowPlaying?, s: Surface) {
-        val pkg = np?.pkg ?: Media.lastPlayer(c) ?: return
+        val pkg = np?.pkg ?: Media.idlePlayer(c) ?: return
         val name = (np?.app ?: Media.label(c, pkg)).uppercase()
         val packed = Icons.of(c, pkg)
         val icon = if (packed == null) (np?.icon ?: Media.appIcon(c, pkg)) else null

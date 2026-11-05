@@ -68,13 +68,77 @@ object Media {
     fun pick(list: List<MediaController>): MediaController? =
         list.firstOrNull { active(it.playbackState?.state) } ?: list.firstOrNull { it.metadata != null } ?: list.firstOrNull()
 
+    /** The followed sessions only (5 Nov 2026: the phone's call screen was being shown as a player). */
+    fun followedControllers(c: Context): List<MediaController> {
+        val list = controllers(c)
+        remember(c, list.map { it.packageName })
+        return list.filter { follows(c, it.packageName) }
+    }
+
     /** The last player used, kept for when nothing is playing. */
-    fun lastPlayer(c: Context): String? = Prefs.of(c).getString("last_player", null)
+    fun lastPlayer(c: Context): String? = Prefs.of(c).getString("last_player", null)?.takeIf { follows(c, it) }
+
+    // ---- Players to follow ----------------------------------------------------------------------
+    // A media session is not proof of music: the call screen, a video app or a voice note can hold
+    // one. A real player offers its library to other apps (a MediaBrowserService: Spotify, Poweramp,
+    // YouTube Music, Samsung Music), so those are followed by default and anything else is not,
+    // unless chosen in settings.
+
+    private const val BROWSER = "android.media.browse.MediaBrowserService"
+    @Volatile private var browsers: Set<String>? = null
+
+    /** Apps that offer a media library, the mark of a player. */
+    fun libraries(c: Context): Set<String> = browsers ?: run {
+        @Suppress("DEPRECATION")
+        val found = c.packageManager.queryIntentServices(Intent(BROWSER), 0).map { it.serviceInfo.packageName }.toSet()
+        browsers = found; found
+    }
+
+    fun follows(c: Context, pkg: String): Boolean {
+        val p = Prefs.of(c)
+        if (pkg in p.getStringSet("music_follow", emptySet())!!) return true
+        if (pkg in p.getStringSet("music_ignore", emptySet())!!) return false
+        return pkg in libraries(c)
+    }
+
+    fun setFollows(c: Context, pkg: String, on: Boolean) {
+        val p = Prefs.of(c)
+        val follow = p.getStringSet("music_follow", emptySet())!!.toMutableSet()
+        val ignore = p.getStringSet("music_ignore", emptySet())!!.toMutableSet()
+        follow.remove(pkg); ignore.remove(pkg)
+        if (on != (pkg in libraries(c))) (if (on) follow else ignore).add(pkg)
+        p.edit().putStringSet("music_follow", follow).putStringSet("music_ignore", ignore).apply()
+    }
+
+    /** Every app that has held a media session here, so settings can list it. */
+    private fun remember(c: Context, pkgs: List<String>) {
+        val p = Prefs.of(c)
+        val seen = p.getStringSet("music_seen", emptySet())!!
+        if (seen.containsAll(pkgs)) return
+        p.edit().putStringSet("music_seen", seen + pkgs).apply()
+    }
+
+    /** Players settings offers: every installed library app and every app seen holding a session. */
+    fun candidates(c: Context): List<String> =
+        (libraries(c) + Prefs.of(c).getStringSet("music_seen", emptySet())!!)
+            .filter { it != c.packageName && (it in libraries(c) || c.packageManager.getLaunchIntentForPackage(it) != null) }
+            .distinct().sortedBy { label(c, it).lowercase() }
+
+    // ---- What Play starts when nothing is playing ------------------------------------------------
+
+    /** The chosen player, or null for the last one used. */
+    fun playWith(c: Context): String? = Prefs.of(c).getString("music_play_with", null)
+    fun setPlayWith(c: Context, pkg: String?) = Prefs.of(c).edit().apply {
+        if (pkg == null) remove("music_play_with") else putString("music_play_with", pkg)
+    }.apply()
+
+    /** The player Play will start when nothing is playing, as the idle widget names it. */
+    fun idlePlayer(c: Context): String? = playWith(c) ?: lastPlayer(c)
 
     private var artCache: Pair<String, Pair<Bitmap?, Int?>>? = null
 
     fun now(c: Context): NowPlaying? {
-        val ctl = pick(controllers(c)) ?: return null
+        val ctl = pick(followedControllers(c)) ?: return null
         val pkg = ctl.packageName
         if (lastPlayer(c) != pkg) Prefs.of(c).edit().putString("last_player", pkg).apply()
         val meta = ctl.metadata
@@ -129,26 +193,46 @@ object Media {
 
     /** Opens the player: its own now-playing screen if it gave one, else the app. */
     fun openAct(c: Context, np: NowPlaying?): Act? {
-        val pkg = np?.pkg ?: lastPlayer(c) ?: return null
+        val pkg = np?.pkg ?: idlePlayer(c) ?: return null
         val launch = c.packageManager.getLaunchIntentForPackage(pkg)
         if (np?.open == null && launch == null) return null
         return Act.Open(pending = np?.open, intent = launch)
     }
 
     fun control(c: Context, what: Control) {
-        val ctl = pick(controllers(c))
-        if (ctl == null) {
-            // No session: hand the key to whichever app last played, as a headset button would
-            val code = KeyEvent.KEYCODE_MEDIA_PLAY
+        val ctl = pick(followedControllers(c))
+        if (ctl == null) { start(c); return }
+        val t = ctl.transportControls
+        when (what) {
+            Control.TOGGLE -> if (active(ctl.playbackState?.state)) t.pause() else t.play()
+        }
+    }
+
+    /**
+     * Nothing followed is playing or paused: start the chosen player, or the last one used. Its
+     * own session first if it still has one, then its media button, as a headset would press it,
+     * then the app itself. With no player known, the key goes wherever Android sends it.
+     */
+    private fun start(c: Context) {
+        val code = KeyEvent.KEYCODE_MEDIA_PLAY
+        val pkg = idlePlayer(c)
+        if (pkg == null) {
             val am = c.getSystemService(AudioManager::class.java)
             am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
             am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
             return
         }
-        val t = ctl.transportControls
-        when (what) {
-            Control.TOGGLE -> if (active(ctl.playbackState?.state)) t.pause() else t.play()
+        controllers(c).firstOrNull { it.packageName == pkg }?.let { it.transportControls.play(); return }
+        @Suppress("DEPRECATION")
+        val receiver = c.packageManager.queryBroadcastReceivers(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg), 0).firstOrNull()?.activityInfo
+        if (receiver != null) {
+            val cn = ComponentName(receiver.packageName, receiver.name)
+            for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                c.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(cn).putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, code)))
+            }
+            return
         }
+        c.packageManager.getLaunchIntentForPackage(pkg)?.let { runCatching { c.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
     /** Opens Android's notification access page for this app. */

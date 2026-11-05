@@ -15,7 +15,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /** One occurrence of an event. All-day events are kept on their own calendar day. */
-class Occurrence(val eventId: Long, val title: String, val begin: Long, val end: Long, val allDay: Boolean, val colour: Int, val day: Int, val location: String = "")
+class Occurrence(val eventId: Long, val title: String, val begin: Long, val end: Long, val allDay: Boolean, val colour: Int, val day: Int, val location: String = "", val calendar: Long = -1L)
 
 object Agenda {
     const val DAYS = 14
@@ -25,8 +25,20 @@ object Agenda {
     /** A day as a number that sorts, yyyymmdd. */
     fun dayKey(cal: Calendar) = cal.get(Calendar.YEAR) * 10000 + (cal.get(Calendar.MONTH) + 1) * 100 + cal.get(Calendar.DAY_OF_MONTH)
 
-    /** Everything from now to [DAYS] days ahead, in order, past events dropped. */
-    fun ahead(c: Context): List<Occurrence> {
+    /**
+     * Everything from now to [DAYS] days ahead, in order, past events dropped. For widget [id], only
+     * its chosen calendars and only as many days as it is set to show; declined invitations are
+     * left out unless settings keep them (5 Nov 2026).
+     */
+    fun ahead(c: Context, id: Int? = null): List<Occurrence> {
+        val all = everything(c)
+        if (id == null) return all
+        val cals = AgendaOptions.calendars(c, id)
+        val last = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, AgendaOptions.days(c, id) - 1) }.let { dayKey(it) }
+        return all.filter { (cals == null || it.calendar in cals) && it.day <= last }
+    }
+
+    private fun everything(c: Context): List<Occurrence> {
         if (!allowed(c)) return emptyList()
         val now = System.currentTimeMillis()
         val start = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
@@ -38,8 +50,10 @@ object Agenda {
         val cols = arrayOf(
             CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.DISPLAY_COLOR,
-            CalendarContract.Instances.EVENT_LOCATION,
+            CalendarContract.Instances.EVENT_LOCATION, CalendarContract.Instances.CALENDAR_ID,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS,
         )
+        val hideDeclined = AgendaOptions.hideDeclined(c)
         val out = ArrayList<Occurrence>()
         val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val local = Calendar.getInstance()
@@ -47,6 +61,7 @@ object Agenda {
         runCatching {
             c.contentResolver.query(uri, cols, "${CalendarContract.Instances.VISIBLE} = 1", null, "${CalendarContract.Instances.BEGIN} ASC")?.use { cur ->
                 while (cur.moveToNext()) {
+                    if (hideDeclined && cur.getInt(8) == CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED) continue
                     val allDay = cur.getInt(4) == 1
                     val begin = cur.getLong(2); val end = cur.getLong(3)
                     val day = if (allDay) { utc.timeInMillis = begin; dayKey(utc) } else { local.timeInMillis = begin; dayKey(local) }
@@ -56,12 +71,12 @@ object Agenda {
                     } else if (end <= now) continue
                     // A timed event that began before today and runs on belongs to today
                     out += Occurrence(cur.getLong(0), cur.getString(1)?.takeIf { it.isNotBlank() } ?: "Busy", begin, end, allDay,
-                        cur.getInt(5) or 0xFF000000.toInt(), if (allDay) day else maxOf(day, today), cur.getString(6)?.trim().orEmpty())
+                        cur.getInt(5) or 0xFF000000.toInt(), if (allDay) day else maxOf(day, today), cur.getString(6)?.trim().orEmpty(), cur.getLong(7))
                 }
             }
         }
         // Today's all-day events that began earlier still show today
-        return out.map { if (it.allDay && it.day < today) Occurrence(it.eventId, it.title, it.begin, it.end, true, it.colour, today, it.location) else it }
+        return out.map { if (it.allDay && it.day < today) Occurrence(it.eventId, it.title, it.begin, it.end, true, it.colour, today, it.location, it.calendar) else it }
             .sortedWith(compareBy<Occurrence> { it.day }.thenBy { !it.allDay }.thenBy { it.begin })
     }
 
@@ -76,11 +91,67 @@ object Agenda {
 
     fun openDay(c: Context, millis: Long): Intent = Intent(Intent.ACTION_VIEW)
         .setData(CalendarContract.CONTENT_URI.buildUpon().appendPath("time").also { ContentUris.appendId(it, millis) }.build())
+        .also { AgendaOptions.app(c)?.let(it::setPackage) }
 
-    fun openEvent(o: Occurrence): Intent = Intent(Intent.ACTION_VIEW)
+    fun openEvent(c: Context, o: Occurrence): Intent = Intent(Intent.ACTION_VIEW)
         .setData(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, o.eventId))
         .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, o.begin)
         .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, o.end)
+        .also { AgendaOptions.app(c)?.let(it::setPackage) }
+
+    /** One of the phone's calendars, as settings lists it. */
+    class Cal(val id: Long, val name: String, val account: String, val colour: Int)
+
+    /** Every calendar the phone shows, grouped by account. */
+    fun calendars(c: Context): List<Cal> {
+        if (!allowed(c)) return emptyList()
+        val out = ArrayList<Cal>()
+        runCatching {
+            c.contentResolver.query(CalendarContract.Calendars.CONTENT_URI,
+                arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+                    CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.CALENDAR_COLOR),
+                "${CalendarContract.Calendars.VISIBLE} = 1", null, null)?.use { cur ->
+                while (cur.moveToNext()) out += Cal(cur.getLong(0), cur.getString(1)?.takeIf { it.isNotBlank() } ?: "Calendar",
+                    cur.getString(2).orEmpty(), cur.getInt(3) or 0xFF000000.toInt())
+            }
+        }
+        return out.sortedWith(compareBy<Cal> { it.account.lowercase() }.thenBy { it.name.lowercase() })
+    }
+}
+
+/**
+ * What each agenda shows (5 Nov 2026): its calendars and how far ahead, per widget, so one agenda
+ * can carry the fixtures and another the week's plans. Declined invitations and the calendar app a
+ * tap opens are set once for every agenda and month.
+ */
+object AgendaOptions {
+    val RANGES = listOf(1 to "Today", 3 to "3 days", 7 to "A week", Agenda.DAYS to "2 weeks")
+
+    /** The widget's calendars, or null for every calendar (also for calendars added later). */
+    fun calendars(c: Context, id: Int): Set<Long>? =
+        Prefs.of(c).getStringSet("agenda_cals_$id", null)?.mapNotNull { it.toLongOrNull() }?.toSet()
+
+    fun setCalendar(c: Context, id: Int, cal: Long, on: Boolean) {
+        val every = Agenda.calendars(c).map { it.id }.toSet()
+        val now = (calendars(c, id) ?: every).toMutableSet().apply { if (on) add(cal) else remove(cal) }
+        Prefs.of(c).edit().apply {
+            if (now.containsAll(every)) remove("agenda_cals_$id") else putStringSet("agenda_cals_$id", now.map { it.toString() }.toSet())
+        }.apply()
+    }
+
+    fun days(c: Context, id: Int): Int = Prefs.of(c).getInt("agenda_days_$id", Agenda.DAYS)
+    fun setDays(c: Context, id: Int, n: Int) = Prefs.of(c).edit().putInt("agenda_days_$id", n).apply()
+
+    fun hideDeclined(c: Context): Boolean = Prefs.of(c).getBoolean("agenda_hide_declined", true)
+    fun setHideDeclined(c: Context, on: Boolean) = Prefs.of(c).edit().putBoolean("agenda_hide_declined", on).apply()
+
+    const val SAMSUNG = "com.samsung.android.calendar"
+    const val GOOGLE = "com.google.android.calendar"
+
+    /** The calendar app taps open, or null for the phone's default. A removed app falls back. */
+    fun app(c: Context): String? = Prefs.of(c).getString("agenda_app", null)?.takeIf { installed(c, it) }
+    fun setApp(c: Context, pkg: String?) = Prefs.of(c).edit().apply { if (pkg == null) remove("agenda_app") else putString("agenda_app", pkg) }.apply()
+    fun installed(c: Context, pkg: String) = c.packageManager.getLaunchIntentForPackage(pkg) != null
 }
 
 /**
@@ -133,7 +204,7 @@ object AgendaPainter : Painter {
         val x0 = if (wide) s.w * 0.34f + 8f else p
         var y = if (wide) p + 2f else headBottom + (if (bare) 12f else 18f)
         val listW = s.w - x0 - p
-        val events = Agenda.ahead(c)
+        val events = Agenda.ahead(c, id)
         val labelP = c.label(s.accent(x0 + listW / 2, y))
         val timeP = c.ink(14.5f, s.ink(x0 + 30f, y), 600)
         val titleP = c.ink(14.5f, s.ink(x0 + listW / 2, y), 450)
@@ -148,7 +219,7 @@ object AgendaPainter : Painter {
 
         if (events.isEmpty()) {
             val emptyP = c.statement(s.ink(x0 + listW / 2, y + 12f))
-            canvas.textTop("Nothing ahead", x0, y + 4f, emptyP)
+            canvas.textTop(if (AgendaOptions.days(c, id) == 1) "Nothing more today" else "Nothing ahead", x0, y + 4f, emptyP)
             val noteP = c.ink(13f, s.muted(x0 + listW / 2, y + 34f), 450)
             canvas.textTop("Two clear weeks", x0, y + 4f + emptyP.textSize * 1.3f, noteP)
             return Scene(hits)
@@ -199,7 +270,7 @@ object AgendaPainter : Painter {
                 detailP.color = s.muted(titleX + 30f, firstMid + 17f)
                 canvas.drawText(fit(detail, detailP, s.w - p - titleX), titleX, firstMid + 17f + capHeight(detailP) / 2, detailP)
             }
-            if (hits.size < 12) hits += Hit(RectF(x0 - 4f, y - 3f, s.w, y + thisRow - 3f), Act.Open(intent = Agenda.openEvent(o)), o.title)
+            if (hits.size < 12) hits += Hit(RectF(x0 - 4f, y - 3f, s.w, y + thisRow - 3f), Act.Open(intent = Agenda.openEvent(c, o)), o.title)
             y += thisRow
             shown++
         }

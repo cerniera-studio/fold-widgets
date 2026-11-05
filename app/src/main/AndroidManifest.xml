@@ -29,6 +29,9 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.APP_CALENDAR" />
         </intent>
+        <!-- Music players: apps that offer a media library, and their media buttons (5 Nov 2026) -->
+        <intent><action android:name="android.media.browse.MediaBrowserService" /></intent>
+        <intent><action android:name="android.intent.action.MEDIA_BUTTON" /></intent>
         <!-- Icon packs, so app icons in the widgets match the home screen's -->
         <intent><action android:name="org.adw.launcher.THEMES" /></intent>
         <intent><action android:name="com.novalauncher.THEME" /></intent>

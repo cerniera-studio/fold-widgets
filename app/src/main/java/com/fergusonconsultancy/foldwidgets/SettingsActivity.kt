@@ -66,6 +66,63 @@ class SettingsActivity : Activity() {
                 if (live) status(true) else button("Turn on") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }))
         })
 
+        // ---- Music (5 Nov 2026): which apps count as players, and what Play starts when idle
+        val players = Media.candidates(this)
+        if (players.isNotEmpty()) {
+            val me = this
+            val redraw = { build(); Widgets.later { Widgets.renderAll(me, Kind.MUSIC) } }
+            column.addView(eyebrow("Music"))
+            column.addView(card().apply {
+                addView(label("The widget follows these players. Apps that offer a music library are followed from the start; anything else holding a media session, such as the phone's call screen, is not.",
+                    13f, Palette.MUTED).apply { setPadding(0, px(14), 0, px(6)) })
+                players.forEach { pkg ->
+                    val on = Media.follows(me, pkg)
+                    addView(row(Media.label(me, pkg), if (on) "Followed" else "Ignored",
+                        button(if (on) "Ignore" else "Follow", primary = false) { Media.setFollows(me, pkg, !on); redraw() }))
+                }
+            })
+            val followed = players.filter { Media.follows(me, it) }
+            if (followed.isNotEmpty()) column.addView(card().apply {
+                val choice = Media.playWith(me)
+                val last = Media.lastPlayer(me)?.let { Media.label(me, it) }
+                addView(row("When nothing is playing", "Play starts " + (choice?.let { Media.label(me, it) } ?: last?.let { "the last player used, now $it" } ?: "the last player used"), null))
+                (listOf<String?>(null) + followed).forEach { pkg ->
+                    val on = pkg == choice
+                    addView(label(pkg?.let { Media.label(me, it) } ?: "The last player used", 15f, if (on) Palette.CHAMPAGNE else Palette.IVORY, if (on) 600 else 500).apply {
+                        setPadding(0, px(12), 0, px(12))
+                        setOnClickListener { Media.setPlayWith(me, pkg); redraw() }
+                    })
+                }
+            })
+        }
+
+        // ---- Calendar (5 Nov 2026): for every agenda and month. Calendars and days are per widget.
+        if (Agenda.allowed(this)) {
+            val me = this
+            val redraw = { build(); Widgets.later { Widgets.renderAll(me, Kind.AGENDA); Widgets.renderAll(me, Kind.MONTH) } }
+            column.addView(eyebrow("Calendar"))
+            column.addView(card().apply {
+                val hide = AgendaOptions.hideDeclined(me)
+                addView(row("Declined invitations", if (hide) "Left out of the agenda" else "Shown in the agenda",
+                    button(if (hide) "Show" else "Hide", primary = false) { AgendaOptions.setHideDeclined(me, !hide); redraw() }))
+                val apps = listOfNotNull(null to "Default",
+                    (AgendaOptions.SAMSUNG to "Samsung").takeIf { AgendaOptions.installed(me, AgendaOptions.SAMSUNG) },
+                    (AgendaOptions.GOOGLE to "Google").takeIf { AgendaOptions.installed(me, AgendaOptions.GOOGLE) })
+                val choice = AgendaOptions.app(me)
+                addView(row("A tap opens", choice?.let { Media.label(me, it) } ?: "The phone's default calendar", null))
+                if (apps.size > 1) addView(LinearLayout(me).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, 0, 0, px(14))
+                    apps.forEachIndexed { i, (pkg, name) ->
+                        addView(button(name, primary = pkg == choice) { AgendaOptions.setApp(me, pkg); redraw() },
+                            LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
+                    }
+                })
+                addView(label("Which calendars an agenda shows, and how far ahead, are set on each widget: hold it on the home screen and open its settings.",
+                    13f, Palette.MUTED).apply { setPadding(0, 0, 0, px(14)) })
+            })
+        }
+
         // ---- Icons: the marks in the widgets come from the home screen's icon pack
         val packs = Icons.packs(this)
         if (packs.isNotEmpty()) {
@@ -349,6 +406,38 @@ class ConfigureActivity : Activity() {
                     box.addView(row(item.label, item.note, toggle))
                 }
             })
+        }
+        // Agenda: how far ahead, and which calendars (5 Nov)
+        if (Widgets.kindOf(this, id) == Kind.AGENDA) {
+            val me = this
+            val redraw = { Widgets.later { Widgets.render(me, id) } }
+            column.addView(eyebrow("Days ahead"))
+            column.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                AgendaOptions.RANGES.forEachIndexed { i, (n, name) ->
+                    addView(button(name, primary = AgendaOptions.days(me, id) == n) {
+                        AgendaOptions.setDays(me, id, n); redraw(); recreate()
+                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
+                }
+            })
+            val cals = Agenda.calendars(this)
+            if (cals.isNotEmpty()) {
+                column.addView(eyebrow("Calendars"))
+                column.addView(label("This agenda shows the calendars marked Shown. New calendars appear while every calendar is shown.",
+                    13f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), px(10)) })
+                column.addView(card().apply {
+                    val chosen = AgendaOptions.calendars(me, id)
+                    cals.forEach { cal ->
+                        val on = chosen == null || cal.id in chosen
+                        val name = android.text.SpannableString("●  " + cal.name).apply {
+                            setSpan(android.text.style.ForegroundColorSpan(cal.colour), 0, 1, 0)
+                        }
+                        addView(row(cal.name, cal.account, button(if (on) "Shown" else "Hidden", primary = on) {
+                            AgendaOptions.setCalendar(me, id, cal.id, !on); redraw(); recreate()
+                        }).also { r -> (r.getChildAt(0) as? LinearLayout)?.getChildAt(0)?.let { (it as? android.widget.TextView)?.text = name } })
+                    }
+                })
+            }
         }
         column.addView(button("Done") { finish() }.apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) })

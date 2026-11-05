@@ -224,7 +224,8 @@ object Prefs {
         runCatching { java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry("foldwidgets_mail") }
     }
 
-    fun forget(c: Context, id: Int) = of(c).edit().remove("finish_$id").remove("seat_$id").apply()
+    fun forget(c: Context, id: Int) = of(c).edit().remove("finish_$id").remove("seat_$id")
+        .remove("agenda_cals_$id").remove("agenda_days_$id").apply()
 
     /** Corner radius in dp. 24 matches Android's own widget corners. */
     fun radius(c: Context): Int = of(c).getInt("radius", 24)
