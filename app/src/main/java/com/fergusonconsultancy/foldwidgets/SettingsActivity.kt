@@ -177,10 +177,10 @@ class SettingsActivity : Activity() {
         // ---- Finish
         column.addView(eyebrow("Finish"))
         column.addView(finishGrid(Finish.entries.toList(), { it == Prefs.defaultFinish(this) }) { f ->
-            if (f != null) Prefs.setDefaultFinish(this, f)
+            if (f != null) { Prefs.setDefaultFinish(this, f); Prefs.followAll(this) }
             Widgets.later { Widgets.renderAll(this) }
         })
-        column.addView(label("Every widget wears this unless it has its own. To give one widget its own finish, hold it on the home screen and open its settings.",
+        column.addView(label("Choosing here dresses every widget. To give one widget its own finish afterwards, hold it on the home screen and open its settings.",
             13f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), 0) })
 
         // ---- Corners
