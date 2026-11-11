@@ -27,7 +27,7 @@ class AgendaRows : RemoteViewsService() {
         override fun onDataSetChanged() {
             val out = ArrayList<Row>()
             var last = -1
-            for (o in Agenda.ahead(c)) {
+            for (o in Agenda.ahead(c, id)) {
                 if (o.day != last) { out += Row(o.day, last == -1, null); last = o.day }
                 out += Row(o.day, false, o)
             }
@@ -58,7 +58,7 @@ class AgendaRows : RemoteViewsService() {
             else {
                 AgendaPainter.paintEvent(c, cv, s, st, e, px / (d * k), sampleY)
                 rv.setContentDescription(R.id.row, e.title)
-                rv.setOnClickFillInIntent(R.id.row, Intent().putExtra(Widgets.EXTRA_TARGET, Agenda.openEvent(e)))
+                rv.setOnClickFillInIntent(R.id.row, Intent().putExtra(Widgets.EXTRA_TARGET, Agenda.openEvent(c, e)))
             }
             rv.setImageViewBitmap(R.id.row_face, bmp)
             return rv
