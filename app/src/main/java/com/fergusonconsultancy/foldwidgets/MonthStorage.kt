@@ -27,6 +27,9 @@ object MonthPainter : Painter {
     override fun paint(c: Context, id: Int, canvas: Canvas, s: Surface): Scene {
         val open = Agenda.openDay(c, System.currentTimeMillis())
         val scene = Scene(listOf(Hit(RectF(0f, 0f, s.w, s.h), Act.Open(intent = open), "Open calendar")))
+        // Turned sideways (12 Nov), a month too short for its grid keeps its week rather than shrinking
+        // to today alone: the month's name, then this week, Monday first, today a filled disc
+        if (s.h < 105f && s.w >= 2.2f * s.h && s.w >= 200f) { week(c, canvas, s); return scene }
         if (minOf(s.w, s.h) < 105f) { today(c, canvas, s); return scene }
         val large = s.w >= 220f && s.h >= 220f
         val k = if (large) minOf(s.w / 256f, s.h / 269f).coerceIn(0.8f, 1.6f) else minOf(s.w / 190f, s.h / 164f).coerceIn(0.62f, 1.5f)
@@ -84,6 +87,41 @@ object MonthPainter : Painter {
             day.add(Calendar.DAY_OF_MONTH, 1)
         }
         return scene
+    }
+
+    /** A wide, short month: its name, then the seven days of this week with their initials. */
+    private fun week(c: Context, canvas: Canvas, s: Surface) {
+        val today = Calendar.getInstance()
+        val k = (s.h / 90f).coerceIn(0.75f, 1.3f)
+        val p = 12f * k
+        val titleP = c.label(s.muted(p + 20f, p + 4f), k, 10f)
+        canvas.textTop(SimpleDateFormat("MMMM", Locale.getDefault()).format(today.time).uppercase(), p + 2f * k, p, titleP)
+        val top = p + capHeight(titleP) + 8f * k
+        val start = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -((get(Calendar.DAY_OF_WEEK) + 5) % 7)) }
+        val end = (start.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 7) }
+        val busy = busyDays(c, start.timeInMillis, end.timeInMillis)
+        val cw = (s.w - 2 * p) / 7f
+        val rowH = s.h - top - p
+        val headP = c.label(s.muted(s.w / 2, top), k, 9.5f).apply { textAlign = Paint.Align.CENTER }
+        val numY = top + capHeight(headP) + (rowH - capHeight(headP)) / 2f
+        val size = minOf(cw * 0.42f, (rowH - capHeight(headP)) * 0.42f)
+        val todayKey = Agenda.dayKey(today)
+        val day = start.clone() as Calendar
+        listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l ->
+            val cx = p + cw * (i + 0.5f)
+            canvas.textTop(l, cx, top, headP)
+            val key = Agenda.dayKey(day)
+            val numP = c.ink(size, s.ink(cx, numY), 500).apply { textAlign = Paint.Align.CENTER }
+            if (key == todayKey) {
+                val ink = s.ink(cx, numY)
+                canvas.drawCircle(cx, numY, size * 0.95f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink })
+                numP.color = if (lum(ink) > 0.5f) 0xFF15191A.toInt() else Palette.IVORY
+            }
+            canvas.drawText(day.get(Calendar.DAY_OF_MONTH).toString(), cx, numY + capHeight(numP) / 2, numP)
+            if (key in busy && key != todayKey)
+                canvas.drawCircle(cx, numY + size * 0.95f + 3f * k, size * 0.09f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = s.accent(cx, numY) })
+            day.add(Calendar.DAY_OF_MONTH, 1)
+        }
     }
 
     /** The vital thing alone: today's number in Italiana, its weekday beneath. */

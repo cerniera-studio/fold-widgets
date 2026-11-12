@@ -339,7 +339,8 @@ object MusicPainter : Painter {
     }
 
     private fun locked(c: Context, cv: Canvas, s: Surface): Scene {
-        val k = (minOf(s.w, s.h) / 164f).coerceIn(0.6f, 1.6f)
+        // Readable when turned sideways too (12 Nov): a short, wide widget no longer shrinks the note
+        val k = (minOf(s.w, s.h) / 164f).coerceIn(0.85f, 1.6f)
         val title = c.statement(s.ink(s.w / 2, s.h / 2 - 10f * k), k).apply { textAlign = Paint.Align.CENTER }
         val note = c.ink(11.5f * k, s.muted(s.w / 2, s.h / 2 + 14f * k)).apply { textAlign = Paint.Align.CENTER }
         cv.drawText("Music", s.w / 2, s.h / 2 - 4f * k, title)

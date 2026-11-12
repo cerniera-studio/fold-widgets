@@ -25,15 +25,46 @@ class SettingsActivity : Activity() {
 
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
+        com.cerniera.kit.Crash.install(this, "Fold Widgets")
+        if (com.cerniera.kit.Crash.show(this, "Fold Widgets")) return
         window.statusBarColor = Palette.GROUND
         window.navigationBarColor = Palette.GROUND
         val (scroll, col) = screen()
         column = col
         setContentView(scroll)
+        // Debug builds only: every widget drawn as held upright and turned sideways, for the launch test
+        if (intent.getStringExtra("open") == "preview" && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) preview = true
+    }
+
+    private var preview = false
+
+    /** Each kind at a cover-screen size upright, and the same cell span turned (an estimate of One UI's grid). */
+    private fun buildPreview() {
+        column.removeAllViews()
+        column.addView(label("Upright and turned", 26f, Palette.IVORY, display = true))
+        val d = Backdrop.density(this)
+        val room = (column.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) - px(40)
+        listOf(Kind.MUSIC to android.util.SizeF(256f, 269f), Kind.AGENDA to android.util.SizeF(256f, 269f),
+            Kind.WEATHER to android.util.SizeF(190f, 164f), Kind.MONTH to android.util.SizeF(190f, 164f)).forEachIndexed { n, (kind, up) ->
+            column.addView(eyebrow(kind.name.lowercase()))
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
+            val turned = android.util.SizeF(up.width * 1.6f, up.height * 0.62f)
+            val total = (up.width + turned.width) * d + px(12)
+            val k = minOf(1f, room / total)
+            listOf(up, turned).forEachIndexed { i, sz ->
+                val bmp = runCatching { Widgets.draw(this, -100 - n, kind, Widgets.Frame(Math.round(sz.width * d), Math.round(sz.height * d), d),
+                    Prefs.defaultFinish(this), Backdrop.flatGround(this)).first }.getOrNull() ?: return@forEachIndexed
+                line.addView(android.widget.ImageView(this).apply { setImageBitmap(bmp); scaleType = android.widget.ImageView.ScaleType.FIT_CENTER },
+                    LinearLayout.LayoutParams(Math.round(sz.width * d * k), Math.round(sz.height * d * k)).apply { if (i > 0) leftMargin = px(12) })
+            }
+            column.addView(line)
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        if (!::column.isInitialized) return
+        if (preview) { column.post { buildPreview() }; return }
         build()
         Widgets.later { Widgets.renderAll(this) }
         RefreshJob.schedule(this)
@@ -78,7 +109,7 @@ class SettingsActivity : Activity() {
                 players.forEach { pkg ->
                     val on = Media.follows(me, pkg)
                     addView(row(Media.label(me, pkg), if (on) "Followed" else "Ignored",
-                        button(if (on) "Ignore" else "Follow", primary = false) { Media.setFollows(me, pkg, !on); redraw() }))
+                        toggle(on, Media.label(me, pkg)) { v -> Media.setFollows(me, pkg, v); redraw() }))
                 }
             })
             val followed = players.filter { Media.follows(me, it) }
@@ -104,20 +135,15 @@ class SettingsActivity : Activity() {
             column.addView(card().apply {
                 val hide = AgendaOptions.hideDeclined(me)
                 addView(row("Declined invitations", if (hide) "Left out of the agenda" else "Shown in the agenda",
-                    button(if (hide) "Show" else "Hide", primary = false) { AgendaOptions.setHideDeclined(me, !hide); redraw() }))
+                    toggle(!hide, "Show declined invitations") { v -> AgendaOptions.setHideDeclined(me, !v); redraw() }))
                 val apps = listOfNotNull(null to "Default",
                     (AgendaOptions.SAMSUNG to "Samsung").takeIf { AgendaOptions.installed(me, AgendaOptions.SAMSUNG) },
                     (AgendaOptions.GOOGLE to "Google").takeIf { AgendaOptions.installed(me, AgendaOptions.GOOGLE) })
                 val choice = AgendaOptions.app(me)
                 addView(row("A tap opens", choice?.let { Media.label(me, it) } ?: "The phone's default calendar", null))
-                if (apps.size > 1) addView(LinearLayout(me).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    setPadding(0, 0, 0, px(14))
-                    apps.forEachIndexed { i, (pkg, name) ->
-                        addView(button(name, primary = pkg == choice) { AgendaOptions.setApp(me, pkg); redraw() },
-                            LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
-                    }
-                })
+                if (apps.size > 1) addView(segments(apps.map { it.second }, apps.indexOfFirst { it.first == choice }.coerceAtLeast(0)) { i ->
+                    AgendaOptions.setApp(me, apps[i].first); redraw()
+                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
                 addView(label("Which calendars an agenda shows, and how far ahead, are set on each widget: hold it on the home screen and open its settings.",
                     13f, Palette.MUTED).apply { setPadding(0, 0, 0, px(14)) })
             })
@@ -151,14 +177,9 @@ class SettingsActivity : Activity() {
 
         // ---- Corners
         column.addView(eyebrow("Corners"))
-        column.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            listOf("Square" to 0, "Soft" to 14, "Round" to 24, "Full" to 32).forEachIndexed { i, (name, dp) ->
-                val on = Prefs.radius(this@SettingsActivity) == dp
-                addView(button(name, primary = on) {
-                    Prefs.setRadius(this@SettingsActivity, dp); build(); Widgets.later { Widgets.renderAll(this@SettingsActivity) }
-                }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
-            }
+        val corners = listOf("Square" to 0, "Soft" to 14, "Round" to 24, "Full" to 32)
+        column.addView(segments(corners.map { it.first }, corners.indexOfFirst { it.second == Prefs.radius(this) }.coerceAtLeast(0)) { i ->
+            Prefs.setRadius(this@SettingsActivity, corners[i].second); Widgets.later { Widgets.renderAll(this@SettingsActivity) }
         })
 
         // ---- Weather
@@ -194,17 +215,12 @@ class SettingsActivity : Activity() {
             )
             val other = choice !in fixed.map { it.first }
             val apps = LinearLayout(me).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            addView(LinearLayout(me).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, 0, 0, px(14))
-                (fixed + ("" to "Other")).forEachIndexed { i, (pkg, name) ->
-                    val on = if (pkg.isEmpty()) other else pkg == choice
-                    addView(button(name, primary = on) {
-                        if (pkg.isEmpty()) apps.visibility = if (apps.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                        else { Weather.setOpener(me, pkg); build(); Widgets.later { Widgets.renderAll(me, Kind.WEATHER) } }
-                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
-                }
-            })
+            val opts = fixed + ("" to "Other")
+            addView(segments(opts.map { it.second }, if (other) opts.size - 1 else opts.indexOfFirst { it.first == choice }.coerceAtLeast(0)) { i ->
+                val pkg = opts[i].first
+                if (pkg.isEmpty()) apps.visibility = View.VISIBLE
+                else { apps.visibility = View.GONE; Weather.setOpener(me, pkg); Widgets.later { Widgets.renderAll(me, Kind.WEATHER) } }
+            }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(14) })
             // Other: every app with a launcher entry, by name
             val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             @Suppress("DEPRECATION")
@@ -369,6 +385,7 @@ class SettingsActivity : Activity() {
 class ConfigureActivity : Activity() {
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
+        com.cerniera.kit.Crash.install(this, "Fold Widgets")
         val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return }
         // Leaving without a choice keeps the widget, wearing whatever it wore
@@ -392,18 +409,11 @@ class ConfigureActivity : Activity() {
                 13f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), px(10)) })
             column.addView(card().apply {
                 WeatherOptions.Item.entries.forEach { item ->
-                    val box = this
-                    var on = WeatherOptions.on(this@ConfigureActivity, id, item)
-                    lateinit var toggle: android.widget.TextView
-                    toggle = button(if (on) "Shown" else "Hidden", primary = on) {
-                        on = !on
-                        WeatherOptions.set(this@ConfigureActivity, id, item, on)
-                        toggle.text = if (on) "Shown" else "Hidden"
-                        toggle.setTextColor(if (on) Palette.GROUND else Palette.IVORY)
-                        toggle.background = if (on) rounded(Palette.CHAMPAGNE, px(18).toFloat()) else rounded(Palette.RAISED, px(18).toFloat(), Palette.HAIRLINE, px(1))
+                    val on = WeatherOptions.on(this@ConfigureActivity, id, item)
+                    addView(row(item.label, item.note, toggle(on, item.label) { v ->
+                        WeatherOptions.set(this@ConfigureActivity, id, item, v)
                         Widgets.later { Widgets.render(this@ConfigureActivity, id) }
-                    }
-                    box.addView(row(item.label, item.note, toggle))
+                    }))
                 }
             })
         }
@@ -412,13 +422,8 @@ class ConfigureActivity : Activity() {
             val me = this
             val redraw = { Widgets.later { Widgets.render(me, id) } }
             column.addView(eyebrow("Days ahead"))
-            column.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                AgendaOptions.RANGES.forEachIndexed { i, (n, name) ->
-                    addView(button(name, primary = AgendaOptions.days(me, id) == n) {
-                        AgendaOptions.setDays(me, id, n); redraw(); recreate()
-                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = px(8) })
-                }
+            column.addView(segments(AgendaOptions.RANGES.map { it.second }, AgendaOptions.RANGES.indexOfFirst { it.first == AgendaOptions.days(me, id) }.coerceAtLeast(0)) { i ->
+                AgendaOptions.setDays(me, id, AgendaOptions.RANGES[i].first); redraw()
             })
             val cals = Agenda.calendars(this)
             if (cals.isNotEmpty()) {
@@ -432,8 +437,8 @@ class ConfigureActivity : Activity() {
                         val name = android.text.SpannableString("●  " + cal.name).apply {
                             setSpan(android.text.style.ForegroundColorSpan(cal.colour), 0, 1, 0)
                         }
-                        addView(row(cal.name, cal.account, button(if (on) "Shown" else "Hidden", primary = on) {
-                            AgendaOptions.setCalendar(me, id, cal.id, !on); redraw(); recreate()
+                        addView(row(cal.name, cal.account, toggle(on, cal.name) { v ->
+                            AgendaOptions.setCalendar(me, id, cal.id, v); redraw()
                         }).also { r -> (r.getChildAt(0) as? LinearLayout)?.getChildAt(0)?.let { (it as? android.widget.TextView)?.text = name } })
                     }
                 })
