@@ -60,6 +60,20 @@ class MediaListener : android.service.notification.NotificationListenerService()
         soon()
     }
 
+    /**
+     * The phone turned, or folded or opened: redraw every widget for the glass now in use. The
+     * music widget needs it (it keeps one picture); the others are drawn again to their exact
+     * pixels and against the wallpaper behind them in this orientation.
+     */
+    private var shape = ""
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val now = "${newConfig.orientation}|${newConfig.screenWidthDp}x${newConfig.screenHeightDp}"
+        if (now == shape) return
+        shape = now
+        main.postDelayed({ Widgets.later { Widgets.renderAll(this) } }, 250)
+    }
+
     override fun onListenerDisconnected() {
         instance = null
         runCatching { sessions?.removeOnActiveSessionsChangedListener(onSessions) }

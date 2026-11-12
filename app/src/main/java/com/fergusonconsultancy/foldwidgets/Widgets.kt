@@ -198,19 +198,93 @@ object Widgets {
         return Frame(Math.round(r.width * d), Math.round(r.height * d), d)
     }
 
-    /** Draws widget [id] at its size and hands it to the launcher. */
+    /**
+     * The sizes the launcher has for widget [id], one per orientation (portrait first), in dp.
+     * Empty when the launcher reports none.
+     */
+    fun orientedSizes(c: Context, id: Int): List<SizeF> {
+        val o = AppWidgetManager.getInstance(c).getAppWidgetOptions(id)
+        @Suppress("DEPRECATION")
+        val sizes = o.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)?.filter { it.width > 0 && it.height > 0 }.orEmpty()
+        if (sizes.size >= 2) {
+            val p = sizes.minBy { it.width / it.height }; val l = sizes.maxBy { it.width / it.height }
+            return if (Math.abs(p.width - l.width) < 1f && Math.abs(p.height - l.height) < 1f) listOf(p) else listOf(p, l)
+        }
+        // Older launchers: portrait is min width by max height, landscape max width by min height
+        val pw = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH); val ph = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+        val lw = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH); val lh = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        if (pw > 0 && ph > 0 && lw > 0 && lh > 0 && (pw != lw || ph != lh)) return listOf(SizeF(pw.toFloat(), ph.toFloat()), SizeF(lw.toFloat(), lh.toFloat()))
+        return sizes
+    }
+
+    private fun same(a: SizeF, b: SizeF) = Math.abs(a.width - b.width) < 1.5f && Math.abs(a.height - b.height) < 1.5f
+
+    /**
+     * Draws widget [id] and hands it to the launcher: one picture for each way the phone can be
+     * held (12 Nov: turned sideways, a widget showed its portrait picture shrunk to fit, with bands
+     * either side). The launcher shows whichever fits, the moment the phone turns. The orientation
+     * in use is drawn to its measured pixels against the wallpaper behind it; the other at its
+     * reported size against the wallpaper's colour, until the phone turns and it is redrawn.
+     *
+     * Music keeps a single picture: its progress line moves by partial updates, which Android
+     * applies only to a single picture, so it is redrawn as the phone turns instead (MediaListener).
+     */
     fun render(c: Context, id: Int) {
         val kind = kindOf(c, id) ?: return
-        val frame = frameOf(c, id)
+        val now = reportedSize(c, id)
+        val sizes = orientedSizes(c, id)
+        val m = AppWidgetManager.getInstance(c)
+        // Without notification access there is no listener to redraw music on turning, and no line to move
+        if ((kind == Kind.MUSIC && MediaListener.instance != null) || sizes.size < 2) {
+            val (rv, listed) = views(c, id, kind, frameOf(c, id), Backdrop.ground(c, id), now, true)
+            m.updateAppWidget(id, rv)
+            @Suppress("DEPRECATION")
+            if (listed) m.notifyAppWidgetViewDataChanged(id, R.id.list)
+            return
+        }
+        val d = Backdrop.density(c)
+        // RemoteViews carry at most 1.5 screens of bitmap; the other orientation gives way first
+        val screen = Backdrop.screenSize(c)
+        val budget = screen.x.toLong() * screen.y * 4 * 3 / 2 * 85 / 100
+        val current = frameOf(c, id)
+        val (_, cpx, cpy) = drawn(current)
+        val map = LinkedHashMap<SizeF, RemoteViews>()
+        var listed = false
+        for (s in sizes) {
+            val isNow = same(s, now)
+            val frame = if (isNow) current else {
+                val spare = (budget - cpx.toLong() * cpy * 4).coerceAtLeast(budget / 4)
+                val want = s.width * d * s.height * d * 4
+                val k = if (want > spare) Math.sqrt(spare / want.toDouble()).toFloat() else 1f
+                Frame(Math.round(s.width * d * k), Math.round(s.height * d * k), d * k)
+            }
+            val (rv, l) = views(c, id, kind, frame, if (isNow) Backdrop.ground(c, id) else Backdrop.flatGround(c), s, isNow)
+            listed = listed || l
+            map[s] = rv
+        }
+        if (map.keys.none { same(it, now) }) {
+            // The size in use isn't among those listed (a launcher mid-resize): draw it as well
+            map[now] = views(c, id, kind, current, Backdrop.ground(c, id), now, true).first
+        }
+        m.updateAppWidget(id, RemoteViews(map))
+        @Suppress("DEPRECATION")
+        if (listed) m.notifyAppWidgetViewDataChanged(id, R.id.list)
+    }
+
+    /** One picture of widget [id] for the size [key] (dp), with its touch areas, list and line. */
+    private fun views(c: Context, id: Int, kind: Kind, frame: Frame, ground: Ground, key: SizeF, isNow: Boolean): Pair<RemoteViews, Boolean> {
         val size = frame.dp
-        val (bitmap, scene) = draw(c, id, kind, frame, Prefs.finish(c, id), Backdrop.ground(c, id))
+        val (bitmap, scene) = draw(c, id, kind, frame, Prefs.finish(c, id), ground)
         val listed = scene.listTop >= 0f
         val rv = RemoteViews(c.packageName, if (listed) R.layout.widget_list else R.layout.widget)
         if (listed) {
-            // A scrolling list of rows over the picture, filled by AgendaRows, each row its own picture
+            // A scrolling list of rows over the picture, filled by AgendaRows, each row its own picture,
+            // drawn for this orientation's width
             place(rv, R.id.list, RectF(0f, scene.listTop, size.width, size.height - 6f))
             rv.setRemoteAdapter(R.id.list, Intent(c, AgendaRows::class.java)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).setData(Uri.parse("foldwidgets://rows/$id")))
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                .putExtra(AgendaRows.EXTRA_W, key.width).putExtra(AgendaRows.EXTRA_H, key.height)
+                .setData(Uri.parse("foldwidgets://rows/$id/${key.width.toInt()}x${key.height.toInt()}")))
             rv.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(c, id * 32 + 31,
                 Intent(c, TapActivity::class.java).setData(Uri.parse("foldwidgets://row/$id"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
@@ -218,6 +292,8 @@ object Widgets {
         }
         rv.setImageViewBitmap(R.id.face, bitmap)
         rv.setContentDescription(R.id.face, kind.name.lowercase())
+        // Each orientation's taps get their own request codes, so neither overwrites the other's
+        val slot = if (isNow) 0 else 16
         HITS.forEachIndexed { i, viewId ->
             val hit = scene.hits.getOrNull(i)
             if (hit == null) { rv.setViewVisibility(viewId, View.GONE); return@forEachIndexed }
@@ -225,7 +301,7 @@ object Widgets {
             if (root) fill(rv, viewId) else place(rv, viewId, hit.rect)
             rv.setViewVisibility(viewId, View.VISIBLE)
             rv.setContentDescription(viewId, hit.label)
-            rv.setOnClickPendingIntent(viewId, pendingFor(c, id, i, hit, size, root))
+            rv.setOnClickPendingIntent(viewId, pendingFor(c, id, slot + i, hit, size, root))
         }
         val line = scene.line
         if (line == null) rv.setViewVisibility(R.id.progress, View.GONE) else {
@@ -235,16 +311,15 @@ object Widgets {
             rv.setColorStateList(R.id.progress, "setProgressTintList", ColorStateList.valueOf(line.fill))
             rv.setColorStateList(R.id.progress, "setProgressBackgroundTintList", ColorStateList.valueOf(line.track))
         }
-        AppWidgetManager.getInstance(c).updateAppWidget(id, rv)
-        @Suppress("DEPRECATION")
-        if (listed) AppWidgetManager.getInstance(c).notifyAppWidgetViewDataChanged(id, R.id.list)
-        // What was reported, what was measured and what was drawn, for the settings screen
-        val r = reportedSize(c, id)
-        val seat = Backdrop.seat(c, id)
-        Prefs.of(c).edit().putString("diag_$id", "${kind.name.lowercase()}: reported ${r.width.toInt()} x ${r.height.toInt()} dp, " +
-            (if (seat?.exact == true && Math.abs(seat.repW - r.width) < 1.5f && Math.abs(seat.repH - r.height) < 1.5f) "measured ${seat.width.toInt()} x ${seat.height.toInt()} px"
-             else "not yet measured at this size (tap it once)") +
-            ", drawn ${bitmap.width} x ${bitmap.height} px at ${"%.3f".format(frame.density)}").apply()
+        if (isNow) {
+            // What was reported, what was measured and what was drawn, for the settings screen
+            val seat = Backdrop.seat(c, id)
+            Prefs.of(c).edit().putString("diag_$id", "${kind.name.lowercase()}: reported ${key.width.toInt()} x ${key.height.toInt()} dp, " +
+                (if (seat?.exact == true && Math.abs(seat.repW - key.width) < 1.5f && Math.abs(seat.repH - key.height) < 1.5f) "measured ${seat.width.toInt()} x ${seat.height.toInt()} px"
+                 else "not yet measured at this size (tap it once)") +
+                ", drawn ${bitmap.width} x ${bitmap.height} px at ${"%.3f".format(frame.density)}").apply()
+        }
+        return rv to listed
     }
 
     /** A touch area covering the whole widget: laid out to fill it, so a tap on it measures it. */

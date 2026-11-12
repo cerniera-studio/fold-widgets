@@ -83,8 +83,22 @@ fun Context.screen(): Pair<ScrollView, LinearLayout> {
         isVerticalScrollBarEnabled = false
         overScrollMode = View.OVER_SCROLL_NEVER
         addView(FrameLayout(context).apply {
-            addView(column, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels, px(620)), -2, Gravity.CENTER_HORIZONTAL))
+            addView(column, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_HORIZONTAL))
         })
+        // Both screens, both ways round (12 Nov): the bars and the camera cut-out are kept clear on
+        // every side, so a landscape screen with the bar at its side loses nothing under it, and the
+        // column stays a readable width, centred, however wide the glass is
+        setOnApplyWindowInsetsListener { v, insets ->
+            val b = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+            v.setPadding(b.left, b.top, b.right, b.bottom)
+            insets
+        }
+        addOnLayoutChangeListener { v, l, _, r, _, ol, _, or, _ ->
+            if (r - l == or - ol) return@addOnLayoutChangeListener
+            val room = (r - l) - v.paddingLeft - v.paddingRight
+            column.layoutParams = (column.layoutParams as FrameLayout.LayoutParams).apply { width = minOf(room, px(620)) }
+            v.post { column.requestLayout() }
+        }
     }
     return scroll to column
 }
@@ -181,3 +195,11 @@ fun Context.finishGrid(options: List<Finish?>, isChosen: (Finish?) -> Boolean, o
     }
     return grid
 }
+
+/** The Kit's drawn switch, for a row's action: on and off, nothing else. */
+fun Context.toggle(on: Boolean, name: String, changed: (Boolean) -> Unit): View =
+    com.cerniera.kit.Toggle(this, on, changed).apply { contentDescription = name }
+
+/** The Kit's segmented choice, its thumb sliding like liquid between the options. */
+fun Context.segments(options: List<String>, selected: Int, picked: (Int) -> Unit): View =
+    com.cerniera.kit.Segmented(this, options, selected, picked)

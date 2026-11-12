@@ -52,4 +52,5 @@ android {
 }
 
 dependencies {
+    implementation(project(":kit"))
 }

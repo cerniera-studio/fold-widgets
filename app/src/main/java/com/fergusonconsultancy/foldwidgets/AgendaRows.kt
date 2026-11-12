@@ -15,12 +15,19 @@ import android.widget.RemoteViewsService
  */
 class AgendaRows : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-        Rows(applicationContext, intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID))
+        Rows(applicationContext, intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID),
+            intent.getFloatExtra(EXTRA_W, 0f), intent.getFloatExtra(EXTRA_H, 0f))
+
+    companion object {
+        /** The widget size (dp) a list is drawn for: each orientation has its own list. */
+        const val EXTRA_W = "fw.rows.w"
+        const val EXTRA_H = "fw.rows.h"
+    }
 
     /** A day heading (with whether it is the first) or an event. */
     private class Row(val day: Int, val first: Boolean, val event: Occurrence?)
 
-    private class Rows(val c: Context, val id: Int) : RemoteViewsFactory {
+    private class Rows(val c: Context, val id: Int, val w: Float, val h: Float) : RemoteViewsFactory {
         private var rows: List<Row> = emptyList()
         override fun onCreate() {}
         override fun onDestroy() {}
@@ -42,7 +49,11 @@ class AgendaRows : RemoteViewsService() {
         override fun getViewAt(position: Int): RemoteViews {
             val rv = RemoteViews(c.packageName, R.layout.list_row)
             val r = rows.getOrNull(position) ?: return rv
-            val frame = Widgets.frameOf(c, id)
+            val frame = run {
+                val now = Widgets.reportedSize(c, id)
+                if (w <= 0f || h <= 0f || (Math.abs(now.width - w) < 1.5f && Math.abs(now.height - h) < 1.5f)) Widgets.frameOf(c, id)
+                else { val d = Backdrop.density(c); Widgets.Frame(Math.round(w * d), Math.round(h * d), d) }
+            }
             val (d, px, _) = Widgets.drawn(frame)
             val whole = Widgets.surfaceFor(c, id, frame)
             val k = Kind.AGENDA.scaleFor(whole.w, whole.h)

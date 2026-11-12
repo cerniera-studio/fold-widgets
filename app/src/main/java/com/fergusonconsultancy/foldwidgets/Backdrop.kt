@@ -154,7 +154,9 @@ object Backdrop {
      * otherwise the wallpaper's overall colours.
      */
     fun ground(c: Context, id: Int): Ground {
-        val seat = seat(c, id)
+        // A seat belongs to the screen and orientation it was measured on (12 Nov)
+        val now = screenSize(c)
+        val seat = seat(c, id)?.takeIf { it.screenW == now.x && it.screenH == now.y }
         val wall = wallpaper(c, seat)
         // Live mode knows where the launcher has the wallpaper on this widget's page, and its tint
         val live = Live.viewOf(c, id)?.takeIf { seat != null && it.screenW == seat.screenW && it.screenH == seat.screenH && LiveService.enabled(c) }
@@ -197,6 +199,9 @@ object Backdrop {
     private const val INNER_WIDTH = 360f
 
     /** The wallpaper's main colour and whether it is light, which Android gives without asking. */
+    /** The wallpaper's colour alone: for a picture drawn for the orientation not in use. */
+    fun flatGround(c: Context): Ground = Ground.flat(wallpaperColour(c))
+
     private fun wallpaperColour(c: Context): Int {
         val wc = runCatching { WallpaperManager.getInstance(c).getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull()
             ?: return 0xFF2A2F2C.toInt()

@@ -7,43 +7,34 @@ import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
 
+import com.cerniera.kit.Kit
+
 /**
- * The family's palette and type, shared with Fold Motion and Fold Taskbar: smoked green-black,
- * ivory ink, champagne for what is chosen. Italiana names things; Jost, a geometric sans in the
- * Bauhaus line, does everything else.
+ * The family's palette and type, from the Kit (Cerniera's shared design system, 12 Nov 2026):
+ * smoked green-black, ivory ink, champagne for what is chosen. Italiana names things; Jost does
+ * everything else. Fold Widgets always draws in the Visconti (night) tokens: it never calls
+ * Kit.follow, because widgets are drawn in the background and their finishes set their own light.
+ * IRON and BRONZE are the pack's own, for its finishes.
  */
 object Palette {
-    const val GROUND = 0xFF0E1311.toInt()
-    const val SURFACE = 0xFF151C18.toInt()
-    const val RAISED = 0xFF1D2621.toInt()
-    const val HAIRLINE = 0x1AF6F1E6
-    const val IVORY = 0xFFF6F1E6.toInt()
+    val GROUND get() = Kit.GROUND
+    val SURFACE get() = Kit.SURFACE
+    val RAISED get() = Kit.RAISED
+    val HAIRLINE get() = Kit.HAIRLINE
+    val IVORY get() = Kit.INK
+    val MUTED get() = Kit.MUTED
+    val CHAMPAGNE get() = Kit.CHAMPAGNE
+    val ROSSO get() = Kit.ROSSO
+    val GOOD get() = Kit.GOOD
+    val WARN get() = Kit.WARN
     const val IRON = 0xFF16191A.toInt()
-    const val MUTED = 0xFF96A098.toInt()
-    const val CHAMPAGNE = 0xFFD9BB86.toInt()
     const val BRONZE = 0xFF7A5A28.toInt()
-    const val ROSSO = 0xFFD7262E.toInt()
-    const val GOOD = 0xFF7FC79A.toInt()
-    const val WARN = 0xFFE0A15A.toInt()
 }
 
+/** Italiana and Jost, from the Kit. */
 object Type {
-
-    private var display: Typeface? = null
-    private val jost = HashMap<Int, Typeface>()
-
-    fun display(c: Context): Typeface = display ?: runCatching {
-        Typeface.createFromAsset(c.assets, "fonts/Italiana-Regular.ttf")
-    }.getOrDefault(Typeface.SERIF).also { display = it }
-
-    /** Jost at a given weight (variable font), falling back to the system sans. */
-    fun sans(c: Context, weight: Int = 400): Typeface = synchronized(jost) {
-        jost.getOrPut(weight) {
-            runCatching {
-                Typeface.Builder(c.assets, "fonts/Jost.ttf").setFontVariationSettings("'wght' $weight").build()
-            }.getOrNull() ?: Typeface.create(Typeface.SANS_SERIF, weight, false)
-        }
-    }
+    fun display(c: Context): Typeface = Kit.display(c)
+    fun sans(c: Context, weight: Int = 400): Typeface = Kit.sans(c, weight)
 }
 
 /** A paint for text at [size] px. */
