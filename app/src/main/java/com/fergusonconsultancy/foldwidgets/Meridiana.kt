@@ -237,7 +237,11 @@ object Meridiana : Painter {
             sky.nextRise?.let { t ->
                 val pos = Heavens.sun(sky.place, t.plusSeconds(120))
                 val (dx, dy) = dir(pos.azimuth)
-                val r = reach * 0.9f
+                // As far along its line as the dial allows, kept inside the edge
+                val edge = 2 * pad / 3
+                var r = reach * 0.9f
+                if (dx < 0) r = min(r, (mx - edge) / -dx); if (dx > 0) r = min(r, (s.w - edge - mx) / dx)
+                if (dy < 0) r = min(r, (footY - edge) / -dy); if (dy > 0) r = min(r, (s.h - edge - footY) / dy)
                 c.drawCircle(mx + dx * r, footY + dy * r, 2.2f * unit, fill(alpha(accent, 0.85f)))
             }
             // Tonight's moon, small at the meridian's head

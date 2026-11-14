@@ -13,13 +13,14 @@ mkdir -p shots
 shot() { adb exec-out screencap -p > "shots/$1.png"; echo "shot $1"; }
 open() { adb shell am force-stop $PKG; adb shell am start -W -n $PKG/.SettingsActivity ${1:+--es open $1} >/dev/null; sleep 6; }
 shape() {  # name WxH dpi
-  adb shell wm density $3; adb shell wm size $2; sleep 2
+  adb shell wm density $3; adb shell wm size $2; sleep 4
   open; shot "$1-settings"
   adb shell input swipe 300 1500 300 300 300; sleep 0.6; adb shell input swipe 300 1500 300 300 300; sleep 1.5
   shot "$1-settings-lower"
   open preview; shot "$1-preview"
   # Meridiana's rows sit below the other widgets
-  for n in 1 2 3 4; do adb shell input swipe 300 1500 300 400 400; sleep 1.2; shot "$1-preview-$n"; done
+  local sz=${2#*x}
+  for n in 1 2 3 4; do adb shell input swipe 300 $((sz*4/5)) 300 $((sz/6)) 400; sleep 1.2; shot "$1-preview-$n"; done
 }
 shape 1-cover-portrait 823x1920 320
 shape 2-cover-landscape 1920x823 320
