@@ -13,7 +13,7 @@ import android.content.Intent
 import android.provider.CalendarContract
 
 /**
- * Keeps the agenda, weather and sundial current without a running service: a job when the calendar
+ * Keeps the agenda and weather current without a running service: a job when the calendar
  * changes, a job every half hour for the weather, and an alarm for when the agenda next changes
  * by itself (an event ending, or midnight turning today into tomorrow).
  */
@@ -40,12 +40,10 @@ class Clockwork : BroadcastReceiver() {
                 add(java.util.Calendar.HOUR_OF_DAY, 1); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 5)
             }.timeInMillis
             val agenda = if (Widgets.ids(c, Kind.AGENDA).isEmpty()) Long.MAX_VALUE else runCatching { Agenda.nextChange(c) }.getOrDefault(hour)
-            val dial = if (Widgets.ids(c, Kind.DIAL).isEmpty()) Long.MAX_VALUE
-                else (System.currentTimeMillis() / Meridiana.CADENCE_MS + 1) * Meridiana.CADENCE_MS + 5_000L
-            val at = minOf(hour, agenda, dial)
+            val at = minOf(hour, agenda)
             val pi = PendingIntent.getBroadcast(c, 7, Intent(c, Clockwork::class.java).setAction(ACTION_TICK),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            c.getSystemService(AlarmManager::class.java).setWindow(AlarmManager.RTC, at, if (at == dial) 60_000L else 4 * 60_000L, pi)
+            c.getSystemService(AlarmManager::class.java).setWindow(AlarmManager.RTC, at, 4 * 60_000L, pi)
             RefreshJob.watchCalendar(c)
         }
     }
