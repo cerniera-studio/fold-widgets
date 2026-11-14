@@ -1,5 +1,7 @@
 package com.fergusonconsultancy.foldwidgets
 
+import com.cerniera.kit.Finish
+import com.cerniera.kit.contrast
 import android.Manifest
 import android.app.Activity
 import android.appwidget.AppWidgetManager
@@ -252,7 +254,7 @@ class SettingsActivity : Activity() {
                 val set = Prefs.of(this@SettingsActivity).getString(key, null) != null
                 addView(row(name, if (set) "Your own image is used behind the glass on this screen"
                     else "Uses the system wallpaper. If the glass shows the wrong picture here, choose the same image you use as this screen's wallpaper.",
-                    if (set) button("Clear", primary = false) { Prefs.of(this@SettingsActivity).edit().remove(key).apply(); Backdrop.invalidate(); build(); Widgets.later { Widgets.renderAll(this@SettingsActivity) } }
+                    if (set) button("Clear", primary = false) { Prefs.of(this@SettingsActivity).edit().remove(key).apply(); Backdrop.invalidate(); Look.changed(this@SettingsActivity); build(); Widgets.later { Widgets.renderAll(this@SettingsActivity) } }
                     else button("Choose", primary = false) { pickImage(key) }))
             }
         })
@@ -349,6 +351,7 @@ class SettingsActivity : Activity() {
             runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             Prefs.of(this).edit().putString(key, uri.toString()).apply()
             Backdrop.invalidate()
+            Look.changed(this)
             Widgets.later { Widgets.renderAll(this) }
         }
     }
