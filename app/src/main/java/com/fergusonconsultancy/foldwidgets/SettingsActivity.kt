@@ -59,6 +59,44 @@ class SettingsActivity : Activity() {
             }
             column.addView(line)
         }
+        meridianaPreview(d, room)
+    }
+
+    /**
+     * Meridiana in each shape it meets, by day (10:40) and by night (21:30) today, side by side: tall
+     * and squarish dials look down (plan), wide ones look across (elevation). The third row spans the
+     * crease (the crease is the meridian); the last is the main screen turned, the crease its horizon.
+     * Then a tap's reveal, by day and by night.
+     */
+    private fun meridianaPreview(d: Float, room: Int) {
+        column.addView(eyebrow("meridiana"))
+        val today = java.time.LocalDate.now()
+        val zone = java.time.ZoneId.systemDefault()
+        val day = today.atTime(10, 40).atZone(zone).toInstant()
+        val night = today.atTime(21, 30).atZone(zone).toInstant()
+        data class Case(val size: android.util.SizeF, val crease: Float = -1f, val reveal: Boolean = false)
+        val cases = listOf(
+            Case(android.util.SizeF(164f, 267f)), Case(android.util.SizeF(190f, 164f)),
+            Case(android.util.SizeF(420f, 420f), crease = 0.5f), Case(android.util.SizeF(380f, 140f)),
+            Case(android.util.SizeF(420f, 300f), crease = 0.5f), Case(android.util.SizeF(190f, 267f), reveal = true),
+            Case(android.util.SizeF(380f, 150f), reveal = true))
+        cases.forEachIndexed { n, case ->
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
+            val sz = case.size
+            val k = minOf(1f, room / (2 * sz.width * d + px(12)))
+            listOf(day, night).forEachIndexed { i, at ->
+                val id = -200 - n * 2 - i
+                Meridiana.fixedAt[id] = at
+                Meridiana.fixedCrease[id] = case.crease
+                Meridiana.fixedReveal[id] = case.reveal
+                val bmp = runCatching { Widgets.draw(this, id, Kind.DIAL, Widgets.Frame(Math.round(sz.width * d), Math.round(sz.height * d), d),
+                    Prefs.defaultFinish(this), Backdrop.flatGround(this)).first }
+                    .onFailure { android.util.Log.e("FoldWidgets", "meridiana preview", it) }.getOrNull() ?: return@forEachIndexed
+                line.addView(android.widget.ImageView(this).apply { setImageBitmap(bmp); scaleType = android.widget.ImageView.ScaleType.FIT_CENTER },
+                    LinearLayout.LayoutParams(Math.round(sz.width * d * k), Math.round(sz.height * d * k)).apply { if (i > 0) leftMargin = px(12) })
+            }
+            column.addView(line, LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(10) })
+        }
     }
 
     override fun onResume() {

@@ -85,6 +85,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <!-- The sundial's hour lines move with the clock and the time zone -->
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -155,6 +158,10 @@
         <receiver android:name=".MonthLarge" android:exported="false" android:label="Month · Full">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_large" />
+        </receiver>
+        <receiver android:name=".MeridianaDial" android:exported="false" android:label="Meridiana · Dial">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/meridiana" />
         </receiver>
     </application>
 </manifest>

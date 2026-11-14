@@ -13,6 +13,7 @@
     <string name="desc_weather_44">Leads with the week ahead, plus the hours and details</string>
     <string name="desc_month_32">The month, today marked, busy days dotted</string>
     <string name="desc_month_43">The month with its name</string>
+    <string name="desc_meridiana">A sundial with the real sun: tap for the exact time</string>
     <string name="desc_music_32">Whatever is playing. Shapes itself to any size: compact, wide, poster, portrait</string>
     <string name="live_description">Keeps your Fold widgets legible on every home screen page. When the home screen comes to rest, Fold Widgets takes one screenshot to see where the launcher has placed the wallpaper behind each widget, then redraws the widgets to match. Screenshots are only taken on the home screen, are never saved and never leave the phone.</string>
 </resources>

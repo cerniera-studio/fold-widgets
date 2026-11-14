@@ -42,7 +42,7 @@ interface Painter {
 }
 
 enum class Kind(val painter: Painter) {
-    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter);
+    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter), DIAL(Meridiana);
 
     /**
      * How much larger the agenda's whole composition is drawn (1 Nov). The agenda keeps one
@@ -84,6 +84,8 @@ class AgendaSmall : Widget() { override val kind = Kind.AGENDA }
 class AgendaLarge : Widget() { override val kind = Kind.AGENDA }
 class MonthSmall : Widget() { override val kind = Kind.MONTH }
 class MonthLarge : Widget() { override val kind = Kind.MONTH }
+/** Meridiana · Dial: the sundial (14 Nov 2026). */
+class MeridianaDial : Widget() { override val kind = Kind.DIAL }
 class WeatherSmall : Widget() {
     override val kind = Kind.WEATHER
     override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) { super.onUpdate(c, m, ids); RefreshJob.schedule(c) }
@@ -116,6 +118,7 @@ object Widgets {
         Kind.AGENDA to listOf(AgendaSmall::class.java, AgendaLarge::class.java),
         Kind.WEATHER to listOf(WeatherSmall::class.java, WeatherLarge::class.java),
         Kind.MONTH to listOf(MonthSmall::class.java, MonthLarge::class.java),
+        Kind.DIAL to listOf(MeridianaDial::class.java),
     )
 
     /** One worker, so redraws never overlap and never block the main thread. */
