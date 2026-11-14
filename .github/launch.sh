@@ -18,7 +18,7 @@ shape() {  # name WxH dpi
   adb shell input swipe 300 1500 300 300 300; sleep 0.6; adb shell input swipe 300 1500 300 300 300; sleep 1.5
   shot "$1-settings-lower"
   open preview; shot "$1-preview"
-  # Meridiana's rows sit below the other widgets
+  # The lower part of the preview, scrolled into view
   local sz=${2#*x}
   for n in 1 2 3 4; do adb shell input swipe 300 $((sz*4/5)) 300 $((sz/6)) 400; sleep 1.2; shot "$1-preview-$n"; done
 }
