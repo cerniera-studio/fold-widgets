@@ -90,6 +90,20 @@ class TapReceiver : BroadcastReceiver() {
         Widgets.seatFrom(c.applicationContext, i)
         when (i.action) {
             ACTION_PLAY -> Media.control(c, Media.Control.TOGGLE)
+            Meridiana.ACTION_REVEAL -> {
+                val id = i.getIntExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
+                if (id < 0) return
+                val app = c.applicationContext
+                val pending = goAsync()
+                Thread {
+                    try {
+                        Meridiana.reveal(app, id); Widgets.render(app, id)
+                        Thread.sleep(Meridiana.REVEAL_MS + 100)
+                        Widgets.render(app, id)
+                    } catch (e: Exception) { android.util.Log.w("FoldWidgets", "dial", e) }
+                    finally { pending.finish() }
+                }.start()
+            }
             ACTION_WEATHER -> {
                 val pending = goAsync()
                 Thread {
