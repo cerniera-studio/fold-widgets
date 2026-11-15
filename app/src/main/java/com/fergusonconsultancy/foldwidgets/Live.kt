@@ -68,12 +68,15 @@ class LiveService : AccessibilityService() {
         runCatching { rootInActiveWindow?.packageName?.toString() in homes }.getOrDefault(false)
 
     private fun shoot() {
-        if (!homeInFront()) return
+        if (!homeInFront()) {
+            android.util.Log.i("FoldWidgets", "Live: home not in front (" + runCatching { rootInActiveWindow?.packageName }.getOrNull() + ", homes $homes)")
+            return
+        }
         // Android allows a screenshot about three times a second at most
         val wait = lastShot + MIN_GAP_MS - SystemClock.uptimeMillis()
         if (wait > 0) { soon(wait); return }
-        val boxes = findWidgets()
-        if (boxes.isEmpty()) return
+        val (boxes, followers) = findWidgets()
+        if (boxes.isEmpty() && followers.isEmpty()) { Live.note(this, "Live: no widgets on this page"); return }
         lastShot = SystemClock.uptimeMillis()
         takeScreenshot(Display.DEFAULT_DISPLAY, Executor { worker.post(it) }, object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
@@ -83,12 +86,13 @@ class LiveService : AccessibilityService() {
                 if (shot == null) return
                 // Still home? A screenshot taken as an app opens is of the app
                 if (!homeInFront()) { shot.recycle(); return }
-                runCatching { Live.apply(this@LiveService, shot, boxes) }.onFailure { Live.note(this@LiveService, "Live: ${it.javaClass.simpleName}") }
+                runCatching { Live.apply(this@LiveService, shot, boxes, followers) }.onFailure { Live.note(this@LiveService, "Live: ${it.javaClass.simpleName}") }
                 shot.recycle()
             }
             override fun onFailure(code: Int) {
                 // Too soon after the last one: try once more after the gap
                 if (code == AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT) soon(MIN_GAP_MS)
+                else Live.note(this@LiveService, "Live: screenshot refused ($code)")
             }
         })
     }
@@ -97,22 +101,29 @@ class LiveService : AccessibilityService() {
      * Every Fold widget on screen, with its bounds, from the launcher's view tree. A widget's
      * picture fills a view this app names "root"; the launcher reports it like any other view.
      */
-    private fun findWidgets(): List<Rect> {
-        val out = ArrayList<Rect>()
+    private fun findWidgets(): Pair<List<Rect>, List<Rect>> {
+        val out = ArrayList<Rect>(); val followers = ArrayList<Rect>()
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList())
-        for (r in roots) walk(r, out, 0)
-        return out.distinctBy { "${it.left},${it.top},${it.width()},${it.height()}" }
+        for (r in roots) walk(r, out, followers, 0)
+        fun List<Rect>.unique() = distinctBy { "${it.left},${it.top},${it.width()},${it.height()}" }
+        return out.unique() to followers.unique()
     }
 
-    private fun walk(n: AccessibilityNodeInfo, out: MutableList<Rect>, depth: Int) {
+    /**
+     * Fold widgets, and (15 Nov 2026) the widgets of the apps that follow Fold Widgets' look, which
+     * name their picture's view "root" too. Seen here, a follower's widget is placed to the pixel
+     * like a Fold widget, and passed on through [LookProvider], so its glass reads the same ground.
+     */
+    private fun walk(n: AccessibilityNodeInfo, out: MutableList<Rect>, followers: MutableList<Rect>, depth: Int) {
         if (depth > 40) return
         val name = n.viewIdResourceName
-        if (name == "$packageName:id/root") {
+        val follower = name != null && Look.FOLLOWERS.any { name == "$it:id/root" }
+        if (name == "$packageName:id/root" || follower) {
             val b = Rect().also { n.getBoundsInScreen(it) }
-            if (b.width() > 20 && b.height() > 20) out += b
+            if (b.width() > 20 && b.height() > 20) (if (follower) followers else out) += b
             return
         }
-        for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it, out, depth + 1) }
+        for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it, out, followers, depth + 1) }
     }
 
     companion object {
@@ -143,10 +154,10 @@ object Live {
 
     fun viewOf(c: Context, id: Int): View? = View.decode(Prefs.of(c).getString("live_$id", null))
 
-    fun note(c: Context, s: String) = Prefs.of(c).edit().putString("live_note", s).apply()
+    fun note(c: Context, s: String) { Prefs.of(c).edit().putString("live_note", s).apply(); android.util.Log.i("FoldWidgets", s) }
     fun lastNote(c: Context): String? = Prefs.of(c).getString("live_note", null)
 
-    fun apply(c: Context, shot: Bitmap, boxes: List<Rect>) {
+    fun apply(c: Context, shot: Bitmap, boxes: List<Rect>, followers: List<Rect> = emptyList()) {
         val screen = Backdrop.screenSize(c)
         val sw = shot.width; val sh = shot.height
         val ids = Kind.entries.flatMap { Widgets.ids(c, it).toList() }
@@ -160,7 +171,7 @@ object Live {
         }
         // 2. Where the wallpaper is, from everything on screen that is not a Fold widget
         val wall = Backdrop.wallpaper(c, com.cerniera.kit.Backdrop.Seat(0f, 0f, 1f, 1f, sw, sh))
-        val view = wall?.let { register(it, shot, boxes) }
+        val view = wall?.let { register(it, shot, boxes + followers) }
         var redrawn = 0
         for ((id, b) in matched) {
             var changed = false
@@ -180,7 +191,9 @@ object Live {
             }
             if (changed) { Widgets.render(c, id); redrawn++ }
         }
-        note(c, "Last look: ${matched.size} of ${boxes.size} widgets found, " +
+        // The followers' widgets: their places on this screen, and the wallpaper's place and tint
+        val shared = Look.share(c, followers, sw, sh, view)
+        note(c, "Last look: ${matched.size} of ${boxes.size} widgets found" + (if (followers.isNotEmpty()) ", ${followers.size} Nodo" + (if (shared) " (passed on)" else "") else "") + ", " +
             (if (view == null) "wallpaper not matched" else "wallpaper at ${view.ox.toInt()}, ${view.oy.toInt()}") + ", $redrawn redrawn")
     }
 
