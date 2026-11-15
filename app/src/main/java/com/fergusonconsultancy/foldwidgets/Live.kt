@@ -68,7 +68,10 @@ class LiveService : AccessibilityService() {
         runCatching { rootInActiveWindow?.packageName?.toString() in homes }.getOrDefault(false)
 
     private fun shoot() {
-        if (!homeInFront()) return
+        if (!homeInFront()) {
+            android.util.Log.i("FoldWidgets", "Live: home not in front (" + runCatching { rootInActiveWindow?.packageName }.getOrNull() + ", homes $homes)")
+            return
+        }
         // Android allows a screenshot about three times a second at most
         val wait = lastShot + MIN_GAP_MS - SystemClock.uptimeMillis()
         if (wait > 0) { soon(wait); return }
