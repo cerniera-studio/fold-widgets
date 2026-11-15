@@ -31,6 +31,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.APP_CALENDAR" />
         </intent>
+        <!-- Home screens, so live mode knows the home screen is in front even when the launcher
+             has no icon of its own (One UI Home, Pixel Launcher) -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
         <!-- Music players: apps that offer a media library, and their media buttons (5 Nov 2026) -->
         <intent><action android:name="android.media.browse.MediaBrowserService" /></intent>
         <intent><action android:name="android.intent.action.MEDIA_BUTTON" /></intent>
