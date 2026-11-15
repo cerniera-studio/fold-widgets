@@ -73,7 +73,7 @@ class LiveService : AccessibilityService() {
         val wait = lastShot + MIN_GAP_MS - SystemClock.uptimeMillis()
         if (wait > 0) { soon(wait); return }
         val (boxes, followers) = findWidgets()
-        if (boxes.isEmpty() && followers.isEmpty()) return
+        if (boxes.isEmpty() && followers.isEmpty()) { Live.note(this, "Live: no widgets on this page"); return }
         lastShot = SystemClock.uptimeMillis()
         takeScreenshot(Display.DEFAULT_DISPLAY, Executor { worker.post(it) }, object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
@@ -89,6 +89,7 @@ class LiveService : AccessibilityService() {
             override fun onFailure(code: Int) {
                 // Too soon after the last one: try once more after the gap
                 if (code == AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT) soon(MIN_GAP_MS)
+                else Live.note(this@LiveService, "Live: screenshot refused ($code)")
             }
         })
     }
@@ -150,7 +151,7 @@ object Live {
 
     fun viewOf(c: Context, id: Int): View? = View.decode(Prefs.of(c).getString("live_$id", null))
 
-    fun note(c: Context, s: String) = Prefs.of(c).edit().putString("live_note", s).apply()
+    fun note(c: Context, s: String) { Prefs.of(c).edit().putString("live_note", s).apply(); android.util.Log.i("FoldWidgets", s) }
     fun lastNote(c: Context): String? = Prefs.of(c).getString("live_note", null)
 
     fun apply(c: Context, shot: Bitmap, boxes: List<Rect>, followers: List<Rect> = emptyList()) {
