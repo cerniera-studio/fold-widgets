@@ -373,8 +373,10 @@ class SettingsActivity : Activity() {
             "not its average, and if the type would not reach a contrast of 7 to 1 the finish flips, or its glass thickens just enough. A launcher never tells a widget where it sits, so each one learns it from " +
             "your first tap. Until then it reads the wallpaper's overall colour.\n\n" +
             "The glass is the wallpaper itself, thickened. Cristallo is clear: near its rim it bends in what lies just beyond the edge, " +
-            "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Both carry one highlight at the upper left, " +
-            "cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat, and its size is the launcher's guess: one tap measures it.\n\n" +
+            "as a curved edge bends light. Vetro is frosted and takes the wallpaper's colour. Goccia is a drop of water: its middle magnifies " +
+            "a touch, and its wide, rounded rim draws in what lies beyond the edge, so the wallpaper bends as it nears the border. " +
+            "Cristallo and Vetro carry one highlight at the upper left; Goccia's light runs right round its rim and returns faintly at the " +
+            "lower right, where light leaves a drop. All are cool by day and warm and dim at night. Before a widget's first tap its glass is clear and flat, and its size is the launcher's guess: one tap measures it.\n\n" +
             "As a widget gets smaller, things fall away in a fixed order until only the vital thing is left: the play disc, today's date, " +
             "the temperature. Music has one control, play and pause; any other tap opens the player.\n\n" +
             "The music widget follows the player Android marks as active. Playing beats paused; among equals, the most recent wins."
