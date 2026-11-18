@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Momento · 4×3: whichever widget the moment needs (Fluido). Sized like the agenda, which it most often becomes. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="255dp"
+    android:minHeight="270dp"
+    android:minResizeWidth="72dp"
+    android:minResizeHeight="72dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget"
+    android:previewImage="@drawable/preview_momento"
+    android:description="@string/desc_momento"
+    android:configure="com.fergusonconsultancy.foldwidgets.ConfigureActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

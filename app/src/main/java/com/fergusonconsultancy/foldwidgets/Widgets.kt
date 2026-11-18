@@ -45,7 +45,9 @@ interface Painter {
 }
 
 enum class Kind(val painter: Painter) {
-    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter);
+    MUSIC(MusicPainter), AGENDA(AgendaPainter), WEATHER(WeatherPainter), MONTH(MonthPainter),
+    /** Fluido: whichever of the four the moment needs (Momento.kt). Drawn as that face. */
+    MOMENTO(Momento.Painter);
 
     /**
      * How much larger the agenda's whole composition is drawn (1 Nov). The agenda keeps one
@@ -87,6 +89,11 @@ class AgendaSmall : Widget() { override val kind = Kind.AGENDA }
 class AgendaLarge : Widget() { override val kind = Kind.AGENDA }
 class MonthSmall : Widget() { override val kind = Kind.MONTH }
 class MonthLarge : Widget() { override val kind = Kind.MONTH }
+class MomentoWidget : Widget() {
+    override val kind = Kind.MOMENTO
+    // It may become the weather, so the forecast is kept fresh while one is placed
+    override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) { super.onUpdate(c, m, ids); RefreshJob.schedule(c) }
+}
 class WeatherSmall : Widget() {
     override val kind = Kind.WEATHER
     override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) { super.onUpdate(c, m, ids); RefreshJob.schedule(c) }
@@ -119,6 +126,7 @@ object Widgets {
         Kind.AGENDA to listOf(AgendaSmall::class.java, AgendaLarge::class.java),
         Kind.WEATHER to listOf(WeatherSmall::class.java, WeatherLarge::class.java),
         Kind.MONTH to listOf(MonthSmall::class.java, MonthLarge::class.java),
+        Kind.MOMENTO to listOf(MomentoWidget::class.java),
     )
 
     /** One worker, so redraws never overlap and never block the main thread. */
@@ -233,7 +241,9 @@ object Widgets {
      * applies only to a single picture, so it is redrawn as the phone turns instead (MediaListener).
      */
     fun render(c: Context, id: Int) {
-        val kind = kindOf(c, id) ?: return
+        val placed = kindOf(c, id) ?: return
+        // Momento is drawn as whichever face the moment needs
+        val kind = if (placed == Kind.MOMENTO) Momento.face(c, id) else placed
         val now = reportedSize(c, id)
         val sizes = orientedSizes(c, id)
         val m = AppWidgetManager.getInstance(c)

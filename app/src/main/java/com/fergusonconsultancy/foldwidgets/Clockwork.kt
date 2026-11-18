@@ -40,7 +40,9 @@ class Clockwork : BroadcastReceiver() {
                 add(java.util.Calendar.HOUR_OF_DAY, 1); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 5)
             }.timeInMillis
             val agenda = if (Widgets.ids(c, Kind.AGENDA).isEmpty()) Long.MAX_VALUE else runCatching { Agenda.nextChange(c) }.getOrDefault(hour)
-            val at = minOf(hour, agenda)
+            // Momento: an event coming into its 45 minutes, or rain into its two hours
+            val momento = runCatching { Momento.nextChange(c) }.getOrDefault(Long.MAX_VALUE)
+            val at = minOf(hour, agenda, momento)
             val pi = PendingIntent.getBroadcast(c, 7, Intent(c, Clockwork::class.java).setAction(ACTION_TICK),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             c.getSystemService(AlarmManager::class.java).setWindow(AlarmManager.RTC, at, 4 * 60_000L, pi)
@@ -54,8 +56,8 @@ class RefreshJob : JobService() {
         Thread {
             try {
                 when (params.jobId) {
-                    WEATHER, WEATHER_NOW -> { runCatching { Weather.refresh(this) }; Widgets.renderAll(this, Kind.WEATHER) }
-                    CALENDAR -> { Widgets.renderAll(this, Kind.AGENDA); Widgets.renderAll(this, Kind.MONTH); Clockwork.arm(this) }
+                    WEATHER, WEATHER_NOW -> { runCatching { Weather.refresh(this) }; Widgets.renderAll(this, Kind.WEATHER); Widgets.renderAll(this, Kind.MOMENTO); Clockwork.arm(this) }
+                    CALENDAR -> { Widgets.renderAll(this, Kind.AGENDA); Widgets.renderAll(this, Kind.MONTH); Widgets.renderAll(this, Kind.MOMENTO); Clockwork.arm(this) }
                 }
             } finally { jobFinished(params, false) }
         }.start()
@@ -75,7 +77,7 @@ class RefreshJob : JobService() {
             val js = c.getSystemService(JobScheduler::class.java)
             // The retired mail widget's inbox job, if one is still queued from before (5 Nov 2026)
             js.cancel(MAIL_RETIRED); Prefs.retireMail(c)
-            if (Widgets.ids(c, Kind.WEATHER).isEmpty()) { js.cancel(WEATHER); return }
+            if (Widgets.ids(c, Kind.WEATHER).isEmpty() && Widgets.ids(c, Kind.MOMENTO).isEmpty()) { js.cancel(WEATHER); return }
             if (js.getPendingJob(WEATHER) != null) return
             js.schedule(JobInfo.Builder(WEATHER, ComponentName(c, RefreshJob::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)

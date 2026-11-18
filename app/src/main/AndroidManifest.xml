@@ -170,5 +170,10 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/month_large" />
         </receiver>
+        <!-- Fluido: one widget that becomes whichever widget the moment needs -->
+        <receiver android:name=".MomentoWidget" android:exported="false" android:label="Momento">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/momento" />
+        </receiver>
     </application>
 </manifest>

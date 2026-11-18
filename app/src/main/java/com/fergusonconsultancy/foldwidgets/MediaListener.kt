@@ -97,6 +97,8 @@ class MediaListener : android.service.notification.NotificationListenerService()
     private val redraw = Runnable {
         Widgets.later {
             Widgets.renderAll(this, Kind.MUSIC)
+            // Momento may become (or stop being) the music widget
+            Widgets.renderAll(this, Kind.MOMENTO)
             main.post { main.removeCallbacks(tick); main.postDelayed(tick, 1000) }
         }
     }

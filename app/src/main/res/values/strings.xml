@@ -15,4 +15,5 @@
     <string name="desc_month_43">The month with its name</string>
     <string name="desc_music_32">Whatever is playing. Shapes itself to any size: compact, wide, poster, portrait</string>
     <string name="live_description">Keeps your Fold widgets legible on every home screen page. When the home screen comes to rest, Fold Widgets takes one screenshot to see where the launcher has placed the wallpaper behind each widget, then redraws the widgets to match. Screenshots are only taken on the home screen, are never saved and never leave the phone.</string>
+    <string name="desc_momento">Becomes what the moment needs: the agenda before you leave, music while it plays, the weather when rain is near, the month otherwise</string>
 </resources>
