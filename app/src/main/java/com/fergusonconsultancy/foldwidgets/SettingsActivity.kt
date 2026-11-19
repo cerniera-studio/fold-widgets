@@ -407,6 +407,29 @@ class ConfigureActivity : Activity() {
             Prefs.setFinish(this, id, f)
             Widgets.later { Widgets.render(this, id) }
         })
+        // Momento: what it shows now and why, and pinning it to one face (Fluido's off switch, per widget)
+        if (Widgets.kindOf(this, id) == Kind.MOMENTO) {
+            val me = this
+            val r = Momento.read(me, id)
+            column.addView(eyebrow("Now"))
+            val why = when {
+                r.pinned -> "Pinned to ${r.face.name.lowercase()}."
+                r.offered != null -> "${r.face.name.lowercase().replaceFirstChar { it.uppercase() }}: ${r.offered.kind.label.lowercase()}, ${r.offered.percent}%. ${r.offered.why}."
+                else -> "The month: nothing is sure enough (60%) to change it."
+            }
+            column.addView(label(why, 15f, Palette.IVORY).apply { setPadding(px(4), 0, px(4), px(8)) })
+            if (!r.pinned) column.addView(card().apply {
+                Momento.KINDS.forEach { k ->
+                    val m = r.moments.firstOrNull { it.kind == k }
+                    addView(row(k.label, m?.reasons?.joinToString("\n") ?: "Not now", label(m?.let { "${it.percent}%" } ?: "–", 14f, Palette.CHAMPAGNE, 500)))
+                }
+            })
+            column.addView(eyebrow("Shows"))
+            val faces = listOf<Kind?>(null, Kind.AGENDA, Kind.MUSIC, Kind.WEATHER, Kind.MONTH)
+            column.addView(segments(listOf("Moment", "Agenda", "Music", "Weather", "Month"), faces.indexOf(Momento.pinned(me, id)).coerceAtLeast(0)) { i ->
+                Momento.pin(me, id, faces[i]); Widgets.later { Widgets.render(me, id) }
+            })
+        }
         // Weather: what this widget shows beyond its minimum (31 Oct)
         if (Widgets.kindOf(this, id) == Kind.WEATHER) {
             column.addView(eyebrow("Shows"))
