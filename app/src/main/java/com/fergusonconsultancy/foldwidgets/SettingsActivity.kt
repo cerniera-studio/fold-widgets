@@ -24,6 +24,13 @@ import android.widget.Toast
 class SettingsActivity : Activity() {
 
     private lateinit var column: LinearLayout
+    private lateinit var scroller: View
+
+    // Continuity (adaptive quality, 19 Nov 2026): the page is rebuilt on every resume and the
+    // activity is rebuilt on a turn, fold or resize, so the typed search and the scroll position
+    // are kept here and put back after each rebuild.
+    private var query = ""
+    private var scrollTo = -1
 
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
@@ -33,6 +40,8 @@ class SettingsActivity : Activity() {
         window.navigationBarColor = Palette.GROUND
         val (scroll, col) = screen()
         column = col
+        scroller = scroll
+        saved?.let { query = it.getString("query").orEmpty(); scrollTo = it.getInt("scroll", -1) }
         setContentView(scroll)
         // Debug builds only: every widget drawn as held upright and turned sideways, for the launch test
         if (intent.getStringExtra("open") == "preview" && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) preview = true
@@ -67,10 +76,19 @@ class SettingsActivity : Activity() {
         super.onResume()
         if (!::column.isInitialized) return
         if (preview) { column.post { buildPreview() }; return }
+        val at = if (scrollTo >= 0) scrollTo else scroller.scrollY
+        scrollTo = -1
         build()
+        scroller.post { scroller.scrollTo(0, at) }
         Widgets.later { Widgets.renderAll(this) }
         RefreshJob.schedule(this)
         Clockwork.arm(this)
+    }
+
+    override fun onSaveInstanceState(out: Bundle) {
+        super.onSaveInstanceState(out)
+        out.putString("query", query)
+        if (::scroller.isInitialized) out.putInt("scroll", scroller.scrollY)
     }
 
     private fun build() {
@@ -201,6 +219,13 @@ class SettingsActivity : Activity() {
             }
             val results = LinearLayout(this@SettingsActivity).apply { orientation = LinearLayout.VERTICAL }
             field.setOnEditorActionListener { v, _, _ -> search(v.text.toString(), results); true }
+            // What was typed survives a rebuild (a turn, a fold, a resize, coming back to the app)
+            field.setText(query); field.setSelection(query.length)
+            field.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(e: android.text.Editable?) { query = e?.toString().orEmpty() }
+            })
             addView(field, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
             addView(results)
         })
