@@ -45,6 +45,16 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
         // Debug builds only: every widget drawn as held upright and turned sideways, for the launch test
         if (intent.getStringExtra("open") == "preview" && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) preview = true
+        // Debug builds only, for the windows test: --es search <words> fills the weather search once,
+        // as if typed (only on a fresh start, so a rebuild can't simply put it back)
+        if (saved == null && debuggable) intent.getStringExtra("search")?.let { query = it; intent.removeExtra("search") }
+    }
+
+    private val debuggable get() = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /** Debug builds only: what the weather search holds, written after every rebuild and every change. */
+    private fun recordSearch(text: String) {
+        if (debuggable) runCatching { java.io.File(filesDir, "search.json").writeText("{\"text\": ${org.json.JSONObject.quote(text)}}") }
     }
 
     private var preview = false
@@ -224,8 +234,9 @@ class SettingsActivity : Activity() {
             field.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(e: android.text.Editable?) { query = e?.toString().orEmpty() }
+                override fun afterTextChanged(e: android.text.Editable?) { query = e?.toString().orEmpty(); recordSearch(query) }
             })
+            recordSearch(field.text.toString())
             addView(field, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(8) })
             addView(results)
         })
