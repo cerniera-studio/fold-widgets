@@ -39,86 +39,54 @@ for line in sys.stdin:
     m = re.search(r'\* Task\{\S+ #(\d+) .*?A=\d+:(\S+) .*?mode=(\S+)', line)
     if m and m.group(2) == '$1': print(m.group(1), m.group(3)); break"
 }
-# The search box: "<text>|<l> <t> <r> <b>" if it is on screen (an empty box reads as its hint)
-box_once() {
-  adb shell rm -f /sdcard/ui.xml
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c "
-import sys, re
-for m in re.finditer(r'<node [^>]*>', sys.stdin.read()):
-    n = m.group(0)
-    if 'class=\"android.widget.EditText\"' in n and 'package=\"$PKG\"' in n:
-        t = re.search(r' text=\"([^\"]*)\"', n).group(1)
-        b = re.findall(r'\d+', re.search(r'bounds=\"([^\"]*)\"', n).group(1))
-        print(t + '|' + ' '.join(b)); break"
-}
-box() { local r=""; for try in 1 2 3; do r=$(box_once); [ -n "$r" ] && break; sleep 1; done; echo "$r"; }
-# Scroll down until the search box is in view (from x, the middle of the window's left part)
-find_box() {
-  local r=$(box)
-  for n in 1 2 3 4 5 6; do
-    [ -n "$r" ] && break
-    adb shell input swipe 300 1300 300 500 400; sleep 1.2; r=$(box)
+# What the weather search holds, from the app's own record (debug builds write files/search.json
+# after every rebuild). The settings page shows live widget previews that never stop moving, so
+# the screen reader can't read it. Clear the record before an event, then wait for the rebuild.
+clear() { adb shell run-as $PKG rm -f files/search.json; }
+held() {
+  local r=""
+  for try in 1 2 3 4 5 6 7 8 9 10; do
+    r=$(adb shell run-as $PKG cat files/search.json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin)['text'])" 2>/dev/null)
+    [ -n "$r" ] && break; sleep 1
   done
   echo "$r"
 }
-typed() { local r=$1; echo "${r%%|*}"; }
-type_into() {  # box, words
-  set -- ${1#*|} "$2"
-  adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); sleep 1
-  adb shell input text "$5"; sleep 1
+check() {  # what happened, expected words
+  local h=$(held)
+  if [ "$h" = "$2" ]; then note "Weather search: '$2' survived $1"
+  else fail "Weather search: $1 emptied the box ('${h:-nothing recorded}')"; fi
 }
 
 # ---- 1. Across a turn, and 2. away and back (full screen)
-adb shell am force-stop $PKG
-adb shell am start -W --windowingMode 1 -n $PKG/.SettingsActivity >/dev/null; sleep 6
-b=$(find_box)
-if [ -z "$b" ]; then
-  warn "Weather search: the box never came into view; checks 1 and 2 skipped"
+adb shell am force-stop $PKG; clear
+adb shell am start -W --windowingMode 1 -n $PKG/.SettingsActivity --es search Lisbon >/dev/null; sleep 6
+if [ "$(held)" != Lisbon ]; then
+  warn "Weather search: the test words didn't arrive ('$(held)'); checks 1 and 2 skipped"
 else
-  type_into "$b" Lisbon
-  b=$(box); shot search-typed
-  if [ "$(typed "$b")" != Lisbon ]; then
-    warn "Weather search: typing gave '$(typed "$b")', not Lisbon; checks 1 and 2 skipped"
-  else
-    adb shell settings put system user_rotation 1; sleep 5; shot search-turned
-    b=$(box); place="kept its place on the page"
-    [ -z "$b" ] && { b=$(find_box); place="had to be scrolled back to"; }
-    if [ "$(typed "$b")" = Lisbon ]; then note "Weather search: 'Lisbon' survived the turn (the box $place)"
-    else fail "Weather search: the turn emptied the box ('$(typed "$b")')"; fi
-    adb shell settings put system user_rotation 0; sleep 4
-
-    adb shell input keyevent KEYCODE_HOME; sleep 3
-    adb shell am start -W -n $PKG/.SettingsActivity >/dev/null; sleep 5; shot search-back
-    b=$(find_box)
-    if [ "$(typed "$b")" = Lisbon ]; then note "Weather search: 'Lisbon' survived leaving and coming back"
-    else fail "Weather search: coming back emptied the box ('$(typed "$b")')"; fi
-  fi
+  shot search-typed
+  clear; adb shell settings put system user_rotation 1; sleep 5; shot search-turned
+  check "the turn" Lisbon
+  clear; adb shell settings put system user_rotation 0; sleep 4; held >/dev/null
+  clear; adb shell input keyevent KEYCODE_HOME; sleep 3
+  adb shell am start -W -n $PKG/.SettingsActivity >/dev/null; sleep 5; shot search-back
+  check "leaving and coming back" Lisbon
 fi
 adb shell am force-stop $PKG; sleep 2
 
 # ---- 3. A pop-up window shrunk (the activity is rebuilt from its saved state)
-adb shell am start -W --windowingMode 5 -n $PKG/.SettingsActivity >/dev/null; sleep 5
+clear
+adb shell am start -W --windowingMode 5 -n $PKG/.SettingsActivity --es search Leeds >/dev/null; sleep 5
 set -- $(task $PKG); id=$1; mode=$2
 echo "task: $id $mode" | tee -a $out
 if [ "$mode" != freeform ]; then
   warn "Pop-up window: the emulator would not open one (mode ${mode:-none}); check 3 skipped"
+elif [ "$(held)" != Leeds ]; then
+  warn "Weather search in a pop-up window: the test words didn't arrive; skipped"
 else
-  adb shell am task resize "$id" 0 0 1503 1568; sleep 5
-  b=$(find_box)
-  if [ -z "$b" ]; then
-    warn "Weather search in a pop-up window: the box never came into view; skipped"
-  else
-    type_into "$b" Leeds; shot search-popup-wide
-    if [ "$(typed "$(box)")" != Leeds ]; then
-      warn "Weather search in a pop-up window: typing didn't take; skipped"
-    else
-      adb shell am task resize "$id" 0 0 740 1568; sleep 6; shot search-popup-narrow
-      b=$(find_box)
-      if [ "$(typed "$b")" = Leeds ]; then note "Weather search in a pop-up window: 'Leeds' survived shrinking it"
-      else fail "Weather search in a pop-up window: shrinking it emptied the box ('$(typed "$b")')"; fi
-    fi
-  fi
+  # Widen first, so that shrinking is a real change of size
+  adb shell am task resize "$id" 0 0 1503 1568; sleep 5; shot search-popup-wide
+  clear; adb shell am task resize "$id" 0 0 740 1568; sleep 6; shot search-popup-narrow
+  check "shrinking a pop-up window" Leeds
 fi
 adb shell am force-stop $PKG
 adb shell wm size reset; adb shell wm density reset
