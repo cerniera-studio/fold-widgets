@@ -162,8 +162,8 @@ object Momento {
     // One face, and along its foot up to two notes: what else is worth knowing now, never what the
     // face already shows. The month with "17:30 · Newcastle v Arsenal" and "Sunset 15:59"; the music
     // with "Rain from 19:00". Notes come first from moments nearly sure enough to have taken the
-    // face themselves (45% or more), then from the day's facts. Only where there's room: a widget
-    // under 190 dp tall keeps its face whole. Settings › Momento switches them off per widget.
+    // face themselves (45% or more), then from the day's facts. Only where there's room: two from
+    // 190 dp tall, one from 150 dp, none below. Settings › Momento switches them off per widget.
 
     /** Notes on (default) or off for widget [id]. */
     fun notesOn(c: Context, id: Int) = Prefs.of(c).getBoolean("momento_notes_$id", true)
@@ -218,7 +218,13 @@ object Momento {
 
         override fun paint(c: Context, id: Int, canvas: android.graphics.Canvas, s: com.cerniera.kit.Surface): Scene {
             val r = read(c, id)
-            val notes = if (s.h >= 190f && s.w >= 150f) notes(c, id, r) else emptyList()
+            // Two notes from 190 dp tall; one, on a single line, from 150 dp (21 Nov 2026: Mechack's
+            // usual Momento is about 165 dp tall); below that the face stays whole
+            val notes = when {
+                s.w < 150f || s.h < 150f -> emptyList()
+                s.h < 190f -> notes(c, id, r).take(1)
+                else -> notes(c, id, r)
+            }
             if (notes.isEmpty()) return Widgets.paintFace(c, id, r.face, canvas, s)
             // Side by side when both fit half the width, otherwise one under the other
             val p = c.meta(0)
