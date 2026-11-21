@@ -40,7 +40,7 @@ class Clockwork : BroadcastReceiver() {
                 add(java.util.Calendar.HOUR_OF_DAY, 1); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 5)
             }.timeInMillis
             val agenda = if (Widgets.ids(c, Kind.AGENDA).isEmpty()) Long.MAX_VALUE else runCatching { Agenda.nextChange(c) }.getOrDefault(hour)
-            // Momento: an event coming into its 45 minutes, or rain into its two hours
+            // Momento: an event coming into its 45 minutes, rain into its two hours, a pause running out
             val momento = runCatching { Momento.nextChange(c) }.getOrDefault(Long.MAX_VALUE)
             val at = minOf(hour, agenda, momento)
             val pi = PendingIntent.getBroadcast(c, 7, Intent(c, Clockwork::class.java).setAction(ACTION_TICK),

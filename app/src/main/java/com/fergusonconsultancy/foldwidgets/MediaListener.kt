@@ -99,6 +99,8 @@ class MediaListener : android.service.notification.NotificationListenerService()
             Widgets.renderAll(this, Kind.MUSIC)
             // Momento may become (or stop being) the music widget
             Widgets.renderAll(this, Kind.MOMENTO)
+            // A pause sets when Momento gives the music face up (Senso's pause grace)
+            runCatching { Clockwork.arm(this) }
             main.post { main.removeCallbacks(tick); main.postDelayed(tick, 1000) }
         }
     }
