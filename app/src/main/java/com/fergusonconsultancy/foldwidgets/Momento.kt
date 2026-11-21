@@ -21,6 +21,9 @@ import com.cerniera.kit.Kind as Moments
  *  - Leaving soon (an event within 45 minutes, somewhere you'd go): the agenda.
  *  - Listening (something playing): the music widget.
  *  - Rain coming (Cielo's next rain, or this app's own forecast, within two hours): the weather.
+ *  - An occasion today (an all-day event, in the morning): the agenda, which leads with it.
+ *  - Sunset (the golden hour on a dry evening, 21 Nov 2026): the weather, whose sun tile gives the time.
+ *  - Winding down (late, on the charger): the agenda, so tomorrow's first event is the last thing seen.
  *  - Otherwise: the month.
  *
  * The moments are the Kit's own (Senso's rules), read from what is on the phone when the widget is
@@ -32,7 +35,10 @@ import com.cerniera.kit.Kind as Moments
 object Momento {
 
     /** What each moment turns the widget into. */
-    private val FACE = mapOf(Moments.LEAVING_SOON to Kind.AGENDA, Moments.LISTENING to Kind.MUSIC, Moments.RAIN_COMING to Kind.WEATHER)
+    private val FACE = mapOf(
+        Moments.LEAVING_SOON to Kind.AGENDA, Moments.LISTENING to Kind.MUSIC, Moments.RAIN_COMING to Kind.WEATHER,
+        Moments.OCCASION to Kind.AGENDA, Moments.SUNSET to Kind.WEATHER, Moments.WINDING_DOWN to Kind.AGENDA,
+    )
     val KINDS = FACE.keys
 
     /** The face when nothing is strong enough to say. */
@@ -79,6 +85,17 @@ object Momento {
         runCatching { Agenda.ahead(c, id).firstOrNull { !it.allDay && it.begin > now } }.getOrNull()
             ?.let { SensoEvent(it.title, it.begin, it.end, it.location.ifBlank { null }) }
 
+    /** Today's first all-day event in this widget's calendars: a birthday, an anniversary. */
+    private fun occasion(c: Context, id: Int, now: Long): SensoEvent? = runCatching {
+        val today = Agenda.dayKey(java.util.Calendar.getInstance().apply { timeInMillis = now })
+        Agenda.ahead(c, id).firstOrNull { it.allDay && it.day == today }
+    }.getOrNull()?.let { SensoEvent(it.title, it.begin, it.end, null, allDay = true) }
+
+    /** The sky over the weather's place (the sunset is local), Leeds until one is set. */
+    private fun sky(c: Context): com.cerniera.kit.Sky.Place =
+        Weather.place(c)?.takeIf { it.lat != 0.0 || it.lon != 0.0 }?.let { com.cerniera.kit.Sky.Place(it.name, it.lat, it.lon) }
+            ?: com.cerniera.kit.Sky.Place.LEEDS
+
     private fun playing(c: Context, now: Long): SensoPlaying? = runCatching { Media.now(c) }.getOrNull()?.let {
         SensoPlaying(it.pkg, it.title, it.artist, it.playing, if (it.playing) now else lastPaused(c, it.pkg, it.title, now))
     }
@@ -103,6 +120,7 @@ object Momento {
     fun signals(c: Context, id: Int, now: Long = System.currentTimeMillis()) = Signals(
         playing = playing(c, now), headphones = headphones(c), charging = charging(c),
         event = event(c, id, now), rain = rain(c, now),
+        occasion = occasion(c, id, now), place = sky(c),
     )
 
     /** What widget [id] reads now: every moment, the one offered, and the face it shows. */
@@ -129,6 +147,12 @@ object Momento {
         rain(c, now)?.let { r -> times += r.startsAt - 2 * 3_600_000L; times += r.startsAt - 3_600_000L; times += r.startsAt + 15 * 60_000L }
         // A paused track keeps the music face for Rules.PAUSE_GRACE, then gives way
         playing(c, now)?.takeIf { !it.playing }?.let { p -> times += p.since + Rules.PAUSE_GRACE + 1_000L }
+        // The golden hour begins 45 minutes before sunset, and ends with it (the top of each hour
+        // already redraws for the occasion's morning and the late evening)
+        runCatching {
+            val zone = java.time.ZoneId.systemDefault()
+            com.cerniera.kit.Sky.day(sky(c), java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate(), zone).sunset?.toEpochMilli()
+        }.getOrNull()?.let { set -> times += set - 45 * 60_000L; times += set }
         return times.filter { it > now + 30_000L }.minOrNull() ?: Long.MAX_VALUE
     }
 
