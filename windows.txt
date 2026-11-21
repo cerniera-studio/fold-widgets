@@ -1,0 +1,4 @@
+::notice::Weather search: 'Lisbon' survived the turn
+::notice::Weather search: 'Lisbon' survived leaving and coming back
+task: 19 freeform
+::notice::Weather search: 'Leeds' survived shrinking a pop-up window
