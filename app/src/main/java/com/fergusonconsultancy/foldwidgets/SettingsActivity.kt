@@ -66,7 +66,10 @@ class SettingsActivity : Activity() {
         val d = Backdrop.density(this)
         val room = (column.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) - px(40)
         listOf(Kind.MUSIC to android.util.SizeF(256f, 269f), Kind.AGENDA to android.util.SizeF(256f, 269f),
-            Kind.WEATHER to android.util.SizeF(190f, 164f), Kind.MONTH to android.util.SizeF(190f, 164f)).forEachIndexed { n, (kind, up) ->
+            Kind.WEATHER to android.util.SizeF(190f, 164f), Kind.MONTH to android.util.SizeF(190f, 164f),
+            // Momento composed: its face with two sample notes along the foot (21 Nov 2026)
+            Kind.MOMENTO to android.util.SizeF(256f, 300f)).forEachIndexed { n, (kind, up) ->
+            Momento.sample = if (kind == Kind.MOMENTO) listOf("17:30 · Newcastle v Arsenal", "Sunset 15:59") else null
             column.addView(eyebrow(kind.name.lowercase()))
             val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
             val turned = android.util.SizeF(up.width * 1.6f, up.height * 0.62f)
@@ -459,6 +462,13 @@ class ConfigureActivity : Activity() {
                     val m = r.moments.firstOrNull { it.kind == k }
                     addView(row(k.label, m?.reasons?.joinToString("\n") ?: "Not now", label(m?.let { "${it.percent}%" } ?: "–", 14f, Palette.CHAMPAGNE, 500)))
                 }
+            })
+            // Composed faces (21 Nov 2026): up to two notes along the foot
+            if (!r.pinned) column.addView(card().apply {
+                val now = Momento.notes(me, id, r)
+                addView(row("Notes", "Up to two short notes along the foot: what else is worth knowing now, never what the face shows. Widgets under 190 dp tall keep their face whole." +
+                    (if (now.isNotEmpty()) "\nNow: " + now.joinToString("  ·  ") else ""),
+                    toggle(Momento.notesOn(me, id), "Notes") { on -> Momento.setNotes(me, id, on); Widgets.later { Widgets.render(me, id) } }))
             })
             column.addView(eyebrow("Shows"))
             val faces = listOf<Kind?>(null, Kind.AGENDA, Kind.MUSIC, Kind.WEATHER, Kind.MONTH)

@@ -37,7 +37,8 @@ class Line(val rect: RectF, val value: Float, val track: Int, val fill: Int)
 
 /** What a painter leaves besides the picture: where touches go, and the line if there is one. */
 /** [listTop]: where a scrolling list of rows begins, in dp, for widgets whose content scrolls (agenda). */
-class Scene(val hits: List<Hit>, val line: Line? = null, val listTop: Float = -1f)
+/** [listBottom]: where that list ends, when something is drawn beneath it (Momento's notes); -1 for the foot. */
+class Scene(val hits: List<Hit>, val line: Line? = null, val listTop: Float = -1f, val listBottom: Float = -1f)
 
 /** Paints one kind of widget on a canvas measured in dp, over its finish. */
 interface Painter {
@@ -293,7 +294,7 @@ object Widgets {
         if (listed) {
             // A scrolling list of rows over the picture, filled by AgendaRows, each row its own picture,
             // drawn for this orientation's width
-            place(rv, R.id.list, RectF(0f, scene.listTop, size.width, size.height - 6f))
+            place(rv, R.id.list, RectF(0f, scene.listTop, size.width, if (scene.listBottom >= 0f) scene.listBottom else size.height - 6f))
             rv.setRemoteAdapter(R.id.list, Intent(c, AgendaRows::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                 .putExtra(AgendaRows.EXTRA_W, key.width).putExtra(AgendaRows.EXTRA_H, key.height)
@@ -388,7 +389,8 @@ object Widgets {
         fun RectF.up() = RectF(left * k, top * k, right * k, bottom * k)
         val scene = Scene(inner.hits.map { Hit(it.rect.up(), it.act, it.label) },
             inner.line?.let { Line(it.rect.up(), it.value, it.track, it.fill) },
-            if (inner.listTop >= 0f) inner.listTop * k else -1f)
+            if (inner.listTop >= 0f) inner.listTop * k else -1f,
+            if (inner.listBottom >= 0f) inner.listBottom * k else -1f)
         return bmp to scene
     }
 

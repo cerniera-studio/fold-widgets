@@ -157,8 +157,99 @@ object Momento {
     }
 
     /** Draws whichever face the moment needs, in place of the widget's own. */
+    // ---- Composed faces (21 Nov 2026) ----------------------------------------------------------
+    //
+    // One face, and along its foot up to two notes: what else is worth knowing now, never what the
+    // face already shows. The month with "17:30 · Newcastle v Arsenal" and "Sunset 15:59"; the music
+    // with "Rain from 19:00". Notes come first from moments nearly sure enough to have taken the
+    // face themselves (45% or more), then from the day's facts. Only where there's room: a widget
+    // under 190 dp tall keeps its face whole. Settings › Momento switches them off per widget.
+
+    /** Notes on (default) or off for widget [id]. */
+    fun notesOn(c: Context, id: Int) = Prefs.of(c).getBoolean("momento_notes_$id", true)
+    fun setNotes(c: Context, id: Int, on: Boolean) = Prefs.of(c).edit().putBoolean("momento_notes_$id", on).apply()
+
+    /** Sample notes for the settings' debug preview (ids below zero), so a test sees the composition. */
+    var sample: List<String>? = null
+
+    /** A moment this close to the threshold is worth a note even when it hasn't the face. */
+    const val NOTE_AT = 0.45f
+
+    /** At most two notes for widget [id] beside the face [r] shows, most telling first. */
+    fun notes(c: Context, id: Int, r: Reading, now: Long = System.currentTimeMillis()): List<String> {
+        if (id < 0) sample?.let { return it }
+        if (r.pinned || !notesOn(c, id)) return emptyList()
+        val s = signals(c, id, now)
+        val zone = java.time.ZoneId.systemDefault()
+        fun hm(t: Long) = java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(java.time.Instant.ofEpochMilli(t).atZone(zone))
+        val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        fun isToday(t: Long) = java.time.Instant.ofEpochMilli(t).atZone(zone).toLocalDate() == today
+        val out = LinkedHashMap<String, String>()
+        fun note(key: String, text: String?) { if (text != null) out.putIfAbsent(key, text) }
+        // Moments nearly sure enough, whose face isn't the one showing
+        r.moments.filter { it.kind != r.offered?.kind && !it.dismissed && it.confidence >= NOTE_AT && FACE[it.kind] != r.face }
+            .forEach { m ->
+                note(m.kind.id, when (m.kind) {
+                    Moments.LEAVING_SOON -> s.event?.let { "${hm(it.start)} · ${it.title}" }
+                    Moments.RAIN_COMING -> s.rain?.let { "Rain from ${hm(it.startsAt)}" }
+                    Moments.OCCASION -> s.occasion?.let { "Today · ${it.title}" }
+                    Moments.SUNSET -> m.why
+                    Moments.LISTENING -> s.playing?.let { (if (it.playing) "Playing · " else "Paused · ") + it.title }
+                    else -> null
+                })
+            }
+        // The day's facts, where the face doesn't already show them
+        if (r.face != Kind.AGENDA) {
+            note("occasion", s.occasion?.let { "Today · ${it.title}" })
+            note("leaving_soon", s.event?.takeIf { isToday(it.start) }?.let { "${hm(it.start)} · ${it.title}" })
+        }
+        if (r.face != Kind.WEATHER) {
+            note("rain_coming", s.rain?.takeIf { it.chance >= 0.4f && isToday(it.startsAt) && it.startsAt > now - 15 * 60_000L }
+                ?.let { "Rain from ${hm(it.startsAt)}" })
+            runCatching { com.cerniera.kit.Sky.day(s.place, today, zone).sunset?.toEpochMilli() }.getOrNull()
+                ?.takeIf { now < it && it - now < 3 * 3_600_000L }?.let { note("sunset", "Sunset ${hm(it)}") }
+        }
+        return out.values.take(2)
+    }
+
     object Painter : com.fergusonconsultancy.foldwidgets.Painter {
-        override fun paint(c: Context, id: Int, canvas: android.graphics.Canvas, s: com.cerniera.kit.Surface): Scene =
-            face(c, id).painter.paint(c, id, canvas, s)
+        private const val ROW = 20f
+        private const val INSET = 16f
+
+        override fun paint(c: Context, id: Int, canvas: android.graphics.Canvas, s: com.cerniera.kit.Surface): Scene {
+            val r = read(c, id)
+            val notes = if (s.h >= 190f && s.w >= 150f) notes(c, id, r) else emptyList()
+            if (notes.isEmpty()) return r.face.painter.paint(c, id, canvas, s)
+            // Side by side when both fit half the width, otherwise one under the other
+            val p = c.meta(0)
+            val half = (s.w - INSET * 2 - 16f) / 2f
+            val sideBySide = notes.size == 1 || notes.all { p.measureText(it) + 10f <= half }
+            val rows = if (sideBySide) 1 else notes.size
+            val band = rows * ROW + 16f
+            // The face, in the room above the notes
+            val above = com.cerniera.kit.Surface(s.finish, s.ground, s.w, s.h - band, s.radius, s.hairline)
+            canvas.save(); canvas.clipRect(0f, 0f, s.w, s.h - band)
+            val scene = r.face.painter.paint(c, id, canvas, above)
+            canvas.restore()
+            // A hairline, then each note after a small point of the finish's light
+            val top = s.h - band
+            val line = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = s.faint(s.w / 2f, top); strokeWidth = s.hairline
+            }
+            canvas.drawLine(INSET, top + 2f, s.w - INSET, top + 2f, line)
+            val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            notes.forEachIndexed { i, n ->
+                val x = if (sideBySide) INSET + i * (half + 16f) else INSET
+                val rowTop = top + 8f + (if (sideBySide) 0 else i) * ROW
+                val width = (if (sideBySide && notes.size > 1) half else s.w - INSET * 2) - 10f
+                val cy = rowTop + ROW / 2f
+                dot.color = s.accent(x, cy)
+                canvas.drawCircle(x + 2f, cy, 2f, dot)
+                val tp = c.meta(s.ink(x + 10f, cy))
+                val text = fit(n, tp, width)
+                canvas.drawText(text, x + 10f, cy + capHeight(tp) / 2f, tp)
+            }
+            return Scene(scene.hits, scene.line, scene.listTop, if (scene.listTop >= 0f) s.h - band else -1f)
+        }
     }
 }
