@@ -288,7 +288,10 @@ object Widgets {
     /** One picture of widget [id] for the size [key] (dp), with its touch areas, list and line. */
     private fun views(c: Context, id: Int, kind: Kind, frame: Frame, ground: Ground, key: SizeF, isNow: Boolean): Pair<RemoteViews, Boolean> {
         val size = frame.dp
-        val (bitmap, scene) = draw(c, id, kind, frame, Prefs.finish(c, id), ground)
+        // Momento is drawn by its own painter, which lays out the face and its notes (21 Nov 2026:
+        // drawing the face directly had left the notes out of every real widget)
+        val drawn = if (kindOf(c, id) == Kind.MOMENTO) Kind.MOMENTO else kind
+        val (bitmap, scene) = draw(c, id, drawn, frame, Prefs.finish(c, id), ground)
         val listed = scene.listTop >= 0f
         val rv = RemoteViews(c.packageName, if (listed) R.layout.widget_list else R.layout.widget)
         if (listed) {
@@ -381,17 +384,21 @@ object Widgets {
         val canvas = Canvas(bmp).apply { scale(d, d) }
         val surface = Surface(finish, ground, size.width, size.height, Prefs.radius(c).toFloat().coerceAtMost(minOf(size.width, size.height) / 2f), 1.1f / d)
         surface.paint(canvas)
-        val k = kind.scaleFor(size.width, size.height)
-        if (k == 1f) return bmp to kind.painter.paint(c, id, canvas, surface)
+        return bmp to paintFace(c, id, kind, canvas, surface)
+    }
+
+    /** Paints [kind] on [surface], scaled as that kind scales at this size (the agenda grows on large widgets). */
+    fun paintFace(c: Context, id: Int, kind: Kind, canvas: Canvas, surface: Surface): Scene {
+        val k = kind.scaleFor(surface.w, surface.h)
+        if (k == 1f) return kind.painter.paint(c, id, canvas, surface)
         canvas.save(); canvas.scale(k, k)
         val inner = kind.painter.paint(c, id, canvas, surface.scaled(k))
         canvas.restore()
         fun RectF.up() = RectF(left * k, top * k, right * k, bottom * k)
-        val scene = Scene(inner.hits.map { Hit(it.rect.up(), it.act, it.label) },
+        return Scene(inner.hits.map { Hit(it.rect.up(), it.act, it.label) },
             inner.line?.let { Line(it.rect.up(), it.value, it.track, it.fill) },
             if (inner.listTop >= 0f) inner.listTop * k else -1f,
             if (inner.listBottom >= 0f) inner.listBottom * k else -1f)
-        return bmp to scene
     }
 
     private fun place(rv: RemoteViews, viewId: Int, r: RectF) {

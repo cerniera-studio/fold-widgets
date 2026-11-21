@@ -219,7 +219,7 @@ object Momento {
         override fun paint(c: Context, id: Int, canvas: android.graphics.Canvas, s: com.cerniera.kit.Surface): Scene {
             val r = read(c, id)
             val notes = if (s.h >= 190f && s.w >= 150f) notes(c, id, r) else emptyList()
-            if (notes.isEmpty()) return r.face.painter.paint(c, id, canvas, s)
+            if (notes.isEmpty()) return Widgets.paintFace(c, id, r.face, canvas, s)
             // Side by side when both fit half the width, otherwise one under the other
             val p = c.meta(0)
             val half = (s.w - INSET * 2 - 16f) / 2f
@@ -229,7 +229,7 @@ object Momento {
             // The face, in the room above the notes
             val above = com.cerniera.kit.Surface(s.finish, s.ground, s.w, s.h - band, s.radius, s.hairline)
             canvas.save(); canvas.clipRect(0f, 0f, s.w, s.h - band)
-            val scene = r.face.painter.paint(c, id, canvas, above)
+            val scene = Widgets.paintFace(c, id, r.face, canvas, above)
             canvas.restore()
             // A hairline, then each note after a small point of the finish's light
             val top = s.h - band
