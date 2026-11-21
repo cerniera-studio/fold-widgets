@@ -120,13 +120,15 @@ object Momento {
     /** The face widget [id] shows now. */
     fun face(c: Context, id: Int): Kind = read(c, id).face
 
-    /** When any Momento may next change by itself: an event coming within 45 minutes, or starting; rain two hours out. */
+    /** When any Momento may next change by itself: an event coming within 45 minutes, or starting; rain two hours out; a pause running out. */
     fun nextChange(c: Context, now: Long = System.currentTimeMillis()): Long {
         val ids = Widgets.ids(c, Kind.MOMENTO)
         if (ids.isEmpty()) return Long.MAX_VALUE
         val times = mutableListOf<Long>()
         ids.forEach { id -> event(c, id, now)?.let { e -> times += e.start - 45 * 60_000L; times += e.start } }
         rain(c, now)?.let { r -> times += r.startsAt - 2 * 3_600_000L; times += r.startsAt - 3_600_000L; times += r.startsAt + 15 * 60_000L }
+        // A paused track keeps the music face for Rules.PAUSE_GRACE, then gives way
+        playing(c, now)?.takeIf { !it.playing }?.let { p -> times += p.since + Rules.PAUSE_GRACE + 1_000L }
         return times.filter { it > now + 30_000L }.minOrNull() ?: Long.MAX_VALUE
     }
 
