@@ -469,9 +469,9 @@ class ConfigureActivity : Activity() {
             // Composed faces (21 Nov 2026): up to two notes along the foot
             if (!r.pinned) column.addView(card().apply {
                 val now = Momento.notes(me, id, r)
-                addView(row("Notes", "A line or two underneath for anything else worth knowing today, such as your next event, rain later or sunset. Two on larger widgets, one on smaller ones, none on the smallest." +
+                addView(row("Notes", "A line or two underneath for anything else worth knowing today, such as your next event, rain later or sunset, a late knot in Nodo or the read you're partway through in Dorso. Two on larger widgets, one on smaller ones, none on the smallest." +
                     (if (now.isNotEmpty()) "\nShowing now: " + now.joinToString("  ·  ") { it.second } else "\nNothing to add right now.") +
-                    "\nTap a note to switch to it for half an hour.",
+                    "\nTap a note to switch to it for half an hour; Nodo's and Dorso's open their app.",
                     toggle(Momento.notesOn(me, id), "Notes") { on -> Momento.setNotes(me, id, on); Widgets.later { Widgets.render(me, id) } }))
             })
             // Learning (22 Nov 2026): what taps have taught it, and a reset
