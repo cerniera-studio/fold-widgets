@@ -162,6 +162,8 @@ object Momento {
         rain(c, now)?.let { r -> times += r.startsAt - 2 * 3_600_000L; times += r.startsAt - 3_600_000L; times += r.startsAt + 15 * 60_000L }
         // A paused track keeps the music face for Rules.PAUSE_GRACE, then gives way
         playing(c, now)?.takeIf { !it.playing }?.let { p -> times += p.since + Rules.PAUSE_GRACE + 1_000L }
+        // A knot coming due turns its note from a time to "Late"
+        knot(c)?.takeIf { !it.late }?.let { times += it.due + 1_000L }
         // A note's swap running out
         Widgets.ids(c, Kind.MOMENTO).forEach { id -> swapEnds(c, id)?.let { times += it + 1_000L } }
         // The golden hour begins 45 minutes before sunset, and ends with it (the top of each hour
@@ -212,7 +214,46 @@ object Momento {
     /** A moment's name in Settings' words. */
     fun label(key: String) = when (key) {
         MomentoLearn.REST -> "the month"
+        "leaving_soon" -> "agenda (next event)"
         else -> Moments.of(key)?.let { k -> FACE[k]?.let { f -> f.name.lowercase() + " (" + k.label.lowercase() + ")" } } ?: key
+    }
+
+    // ---- The family's notes: Nodo and Dorso (22 Nov 2026) ----------------------------------------
+
+    private val NODO: Uri get() = Uri.parse("content://com.cerniera.nodo.cues/next")
+    private val DORSO: Uri get() = Uri.parse("content://com.cerniera.dorso.reading/current")
+
+    /** Nodo's knot that matters most: the earliest late one, else the next due within two hours. */
+    class Knot(val text: String, val due: Long, val late: Boolean, val lateCount: Int)
+    fun knot(c: Context): Knot? = runCatching {
+        c.contentResolver.query(NODO, null, null, null, null)?.use { cur ->
+            if (!cur.moveToFirst()) null
+            else Knot(cur.getString(cur.getColumnIndexOrThrow("text")), cur.getLong(cur.getColumnIndexOrThrow("due")),
+                cur.getInt(cur.getColumnIndexOrThrow("late")) == 1, cur.getInt(cur.getColumnIndexOrThrow("late_count")))
+        }
+    }.getOrNull()
+
+    /** The read you're partway through in Dorso, opened in the last week. */
+    class Read(val id: String, val title: String, val minutesLeft: Int)
+    fun reading(c: Context): Read? = runCatching {
+        c.contentResolver.query(DORSO, null, null, null, null)?.use { cur ->
+            if (!cur.moveToFirst()) null
+            else Read(cur.getString(cur.getColumnIndexOrThrow("id")), cur.getString(cur.getColumnIndexOrThrow("title")),
+                cur.getInt(cur.getColumnIndexOrThrow("minutes_left")))
+        }
+    }.getOrNull()
+
+    /** Notes that open their app rather than swap the face. */
+    const val NODO_NOTE = "nodo"
+    const val DORSO_NOTE = "dorso"
+
+    /** What a tap on the Nodo or Dorso note opens: Nodo, or Dorso at your page. */
+    fun opens(c: Context, key: String): Intent? = when (key) {
+        NODO_NOTE -> c.packageManager.getLaunchIntentForPackage("com.cerniera.nodo")
+        DORSO_NOTE -> reading(c)?.let { r ->
+            c.packageManager.getLaunchIntentForPackage("com.cerniera.dorso")?.putExtra("read", r.id)
+        }
+        else -> null
     }
 
     // ---- Composed faces (21 Nov 2026) ----------------------------------------------------------
@@ -256,6 +297,9 @@ object Momento {
                     else -> null
                 })
             }
+        // A late knot in Nodo comes before the day's facts: it's waiting on you
+        val k = knot(c)
+        if (k != null && k.late) note(NODO_NOTE, (if (k.lateCount > 1) "${k.lateCount} late knots · " else "Late · ") + k.text)
         // The day's facts, where the face doesn't already show them
         if (r.face != Kind.AGENDA) {
             note("occasion", s.occasion?.let { "Today · ${it.title}" })
@@ -267,6 +311,9 @@ object Momento {
             runCatching { com.cerniera.kit.Sky.day(s.place, today, zone).sunset?.toEpochMilli() }.getOrNull()
                 ?.takeIf { now < it && it - now < 3 * 3_600_000L }?.let { note("sunset", "Sunset ${hm(it)}") }
         }
+        // A knot due within two hours, then the read you're partway through: the quietest notes
+        if (k != null && !k.late) note(NODO_NOTE, "${hm(k.due)} · ${k.text}")
+        reading(c)?.let { d -> note(DORSO_NOTE, "Carry on · ${d.title} · ${d.minutesLeft} min left") }
         // Never a note for what the face already is
         return out.entries.filter { e -> Moments.of(e.key)?.let { FACE[it] } != r.face }.take(2).map { it.key to it.value }
     }
@@ -315,8 +362,11 @@ object Momento {
                 val text = fit(n, tp, width)
                 canvas.drawText(text, x + 10f, cy + capHeight(tp) / 2f, tp)
                 // A tap on a note swaps to its face (and teaches Momento); the row is the target
-                hits += Hit(android.graphics.RectF(x - 6f, rowTop, x + width + 16f, rowTop + ROW + 4f),
-                    Act.Send(TapReceiver.ACTION_NOTE + ":" + key), n)
+                val area = android.graphics.RectF(x - 6f, rowTop, x + width + 16f, rowTop + ROW + 4f)
+                // Nodo's and Dorso's notes open their app; the others swap the face (and teach Momento)
+                val opens = opens(c, key)
+                hits += if (opens != null) Hit(area, Act.Open(intent = opens), n)
+                    else Hit(area, Act.Send(TapReceiver.ACTION_NOTE + ":" + key), n)
             }
             // The face's own touch areas, then the notes', within the widget's twelve
             return Scene((scene.hits.take(12 - hits.size) + hits), scene.line, scene.listTop, if (scene.listTop >= 0f) s.h - band else -1f)

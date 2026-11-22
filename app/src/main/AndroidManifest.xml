@@ -14,6 +14,9 @@
         tools:ignore="ScopedStorage" />
     <!-- Refreshing the clock-bound widgets at midnight -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Momento's notes (22 Nov 2026): Nodo's most pressing knot, and the read you're partway through in Dorso -->
+    <uses-permission android:name="com.cerniera.nodo.permission.NEXT" />
+    <uses-permission android:name="com.cerniera.dorso.permission.READING" />
 
     <!-- Naming and opening whichever player is active -->
     <queries>
@@ -21,6 +24,8 @@
         <package android:name="com.sec.android.daemonapp" />
         <!-- Nodo, whose widget follows this app's look (Look.kt) -->
         <package android:name="com.cerniera.nodo" />
+        <!-- Dorso, whose read in progress Momento's note carries on -->
+        <package android:name="com.cerniera.dorso" />
         <!-- Cielo, offered as what the weather widget opens -->
         <package android:name="com.fergusonconsultancy.cielo" />
         <intent>
@@ -92,6 +97,13 @@
         <receiver
             android:name=".TapReceiver"
             android:exported="false" />
+
+        <!-- Nodo and Dorso say something changed: Momento looks again (only ever a redraw) -->
+        <receiver
+            android:name=".MomentoRefresh"
+            android:exported="true">
+            <intent-filter><action android:name="com.cerniera.MOMENTO_REFRESH" /></intent-filter>
+        </receiver>
 
         <receiver
             android:name=".Clockwork"
