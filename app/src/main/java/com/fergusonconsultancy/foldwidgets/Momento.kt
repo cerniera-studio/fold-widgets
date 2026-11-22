@@ -124,15 +124,30 @@ object Momento {
     )
 
     /** What widget [id] reads now: every moment, the one offered, and the face it shows. */
-    class Reading(val moments: List<Moment>, val offered: Moment?, val face: Kind, val pinned: Boolean)
+    /** [swapped]: showing a note's face after a tap on it. [learned]: the rest face came from learning. */
+    class Reading(val moments: List<Moment>, val offered: Moment?, val face: Kind, val pinned: Boolean,
+                  val swapped: Boolean = false, val learned: Boolean = false)
 
     fun read(c: Context, id: Int, now: Long = System.currentTimeMillis()): Reading {
         pinned(c, id)?.let { return Reading(emptyList(), null, it, true) }
-        val moments = Rules.read(signals(c, id, now), now).filter { it.kind in KINDS }
+        // Senso's moments, each moved by what Momento has learned for this slot of the week
+        val moments = Rules.read(signals(c, id, now), now).filter { it.kind in KINDS }.map { m ->
+            val a = MomentoLearn.adjust(c, m.kind.id, now)
+            if (a == 0f) m else m.copy(confidence = (m.confidence + a).coerceIn(0f, 1f),
+                reasons = m.reasons + "learned (${MomentoLearn.describe(MomentoLearn.slot(now)).lowercase()}) · ${"%+.2f".format(java.util.Locale.UK, a)}")
+        }.sortedByDescending { it.confidence }
+        // A note tapped in the last 30 minutes: its face, until then
+        swap(c, id, now)?.let { key ->
+            val k = Moments.of(key)
+            return Reading(moments, moments.firstOrNull { it.kind == k }, FACE[k] ?: REST, false, swapped = true)
+        }
         val held = Prefs.of(c).getString("momento_held_$id", null)?.let { Moments.of(it) }
         val offered = Rules.pick(moments, KINDS, held)
         if (offered?.kind != held) Prefs.of(c).edit().putString("momento_held_$id", offered?.kind?.id).apply()
-        return Reading(moments, offered, offered?.let { FACE.getValue(it.kind) } ?: REST, false)
+        if (offered != null) return Reading(moments, offered, FACE.getValue(offered.kind), false)
+        // Nothing sure enough: the month, or the face learned for this slot
+        val learned = MomentoLearn.rest(c, now)?.let { Moments.of(it) }?.let { FACE[it] }
+        return Reading(moments, null, learned ?: REST, false, learned = learned != null)
     }
 
     /** The face widget [id] shows now. */
@@ -147,6 +162,8 @@ object Momento {
         rain(c, now)?.let { r -> times += r.startsAt - 2 * 3_600_000L; times += r.startsAt - 3_600_000L; times += r.startsAt + 15 * 60_000L }
         // A paused track keeps the music face for Rules.PAUSE_GRACE, then gives way
         playing(c, now)?.takeIf { !it.playing }?.let { p -> times += p.since + Rules.PAUSE_GRACE + 1_000L }
+        // A note's swap running out
+        Widgets.ids(c, Kind.MOMENTO).forEach { id -> swapEnds(c, id)?.let { times += it + 1_000L } }
         // The golden hour begins 45 minutes before sunset, and ends with it (the top of each hour
         // already redraws for the occasion's morning and the late evening)
         runCatching {
@@ -157,6 +174,47 @@ object Momento {
     }
 
     /** Draws whichever face the moment needs, in place of the widget's own. */
+    // ---- Taps, and what they teach (22 Nov 2026) ---------------------------------------------
+
+    private const val SWAP_MS = 30 * 60_000L
+
+    /** The note key widget [id] was swapped to, while the swap lasts. */
+    fun swap(c: Context, id: Int, now: Long = System.currentTimeMillis()): String? {
+        val v = Prefs.of(c).getString("momento_swap_$id", null) ?: return null
+        val key = v.substringBefore("@"); val until = v.substringAfter("@").toLongOrNull() ?: 0L
+        return key.takeIf { now < until }
+    }
+
+    fun swapEnds(c: Context, id: Int): Long? =
+        Prefs.of(c).getString("momento_swap_$id", null)?.substringAfter("@")?.toLongOrNull()?.takeIf { it > System.currentTimeMillis() }
+
+    /** What brought the face widget [id] shows now: a moment's id, or rest. */
+    private fun shown(c: Context, id: Int): String {
+        swap(c, id)?.let { return it }
+        return Prefs.of(c).getString("momento_held_$id", null) ?: MomentoLearn.REST
+    }
+
+    /** A tap on the face: useful now. */
+    fun faceTapped(c: Context, id: Int) {
+        if (pinned(c, id) != null) return
+        MomentoLearn.engaged(c, shown(c, id))
+    }
+
+    /** A tap on a note: not this, that. Swaps to the note's face for 30 minutes, and learns. */
+    fun noteTapped(c: Context, id: Int, key: String) {
+        val now = System.currentTimeMillis()
+        MomentoLearn.swapped(c, shown(c, id), key, now)
+        Prefs.of(c).edit().putString("momento_swap_$id", "$key@${now + SWAP_MS}").apply()
+        Widgets.render(c, id)
+        runCatching { Clockwork.arm(c) }
+    }
+
+    /** A moment's name in Settings' words. */
+    fun label(key: String) = when (key) {
+        MomentoLearn.REST -> "the month"
+        else -> Moments.of(key)?.let { k -> FACE[k]?.let { f -> f.name.lowercase() + " (" + k.label.lowercase() + ")" } } ?: key
+    }
+
     // ---- Composed faces (21 Nov 2026) ----------------------------------------------------------
     //
     // One face, and along its foot up to two notes: what else is worth knowing now, never what the
@@ -176,8 +234,8 @@ object Momento {
     const val NOTE_AT = 0.45f
 
     /** At most two notes for widget [id] beside the face [r] shows, most telling first. */
-    fun notes(c: Context, id: Int, r: Reading, now: Long = System.currentTimeMillis()): List<String> {
-        if (id < 0) sample?.let { return it }
+    fun notes(c: Context, id: Int, r: Reading, now: Long = System.currentTimeMillis()): List<Pair<String, String>> {
+        if (id < 0) sample?.let { l -> return l.mapIndexed { i, t -> (if (i == 0) "leaving_soon" else "sunset") to t } }
         if (r.pinned || !notesOn(c, id)) return emptyList()
         val s = signals(c, id, now)
         val zone = java.time.ZoneId.systemDefault()
@@ -209,7 +267,8 @@ object Momento {
             runCatching { com.cerniera.kit.Sky.day(s.place, today, zone).sunset?.toEpochMilli() }.getOrNull()
                 ?.takeIf { now < it && it - now < 3 * 3_600_000L }?.let { note("sunset", "Sunset ${hm(it)}") }
         }
-        return out.values.take(2)
+        // Never a note for what the face already is
+        return out.entries.filter { e -> Moments.of(e.key)?.let { FACE[it] } != r.face }.take(2).map { it.key to it.value }
     }
 
     object Painter : com.fergusonconsultancy.foldwidgets.Painter {
@@ -229,7 +288,7 @@ object Momento {
             // Side by side when both fit half the width, otherwise one under the other
             val p = c.meta(0)
             val half = (s.w - INSET * 2 - 16f) / 2f
-            val sideBySide = notes.size == 1 || notes.all { p.measureText(it) + 10f <= half }
+            val sideBySide = notes.size == 1 || notes.all { p.measureText(it.second) + 10f <= half }
             val rows = if (sideBySide) 1 else notes.size
             val band = rows * ROW + 16f
             // The face, in the room above the notes
@@ -244,7 +303,8 @@ object Momento {
             }
             canvas.drawLine(INSET, top + 2f, s.w - INSET, top + 2f, line)
             val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-            notes.forEachIndexed { i, n ->
+            val hits = mutableListOf<Hit>()
+            notes.forEachIndexed { i, (key, n) ->
                 val x = if (sideBySide) INSET + i * (half + 16f) else INSET
                 val rowTop = top + 8f + (if (sideBySide) 0 else i) * ROW
                 val width = (if (sideBySide && notes.size > 1) half else s.w - INSET * 2) - 10f
@@ -254,8 +314,12 @@ object Momento {
                 val tp = c.meta(s.ink(x + 10f, cy))
                 val text = fit(n, tp, width)
                 canvas.drawText(text, x + 10f, cy + capHeight(tp) / 2f, tp)
+                // A tap on a note swaps to its face (and teaches Momento); the row is the target
+                hits += Hit(android.graphics.RectF(x - 6f, rowTop, x + width + 16f, rowTop + ROW + 4f),
+                    Act.Send(TapReceiver.ACTION_NOTE + ":" + key), n)
             }
-            return Scene(scene.hits, scene.line, scene.listTop, if (scene.listTop >= 0f) s.h - band else -1f)
+            // The face's own touch areas, then the notes', within the widget's twelve
+            return Scene((scene.hits.take(12 - hits.size) + hits), scene.line, scene.listTop, if (scene.listTop >= 0f) s.h - band else -1f)
         }
     }
 }

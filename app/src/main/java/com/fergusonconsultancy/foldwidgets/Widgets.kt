@@ -439,6 +439,13 @@ object Widgets {
     fun hitOf(i: Intent): RectF? = i.getFloatArrayExtra(EXTRA_HIT)?.takeIf { it.size == 4 }?.let { RectF(it[0], it[1], it[2], it[3]) }
     fun sizeOf(i: Intent): SizeF? = i.getFloatArrayExtra(EXTRA_SIZE)?.takeIf { it.size == 2 }?.let { SizeF(it[0], it[1]) }
 
+    /** A tap on a Momento widget's face: Momento learns it was useful (22 Nov 2026). */
+    fun momentoTap(c: Context, i: Intent) {
+        val id = i.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        if (id == AppWidgetManager.INVALID_APPWIDGET_ID || kindOf(c, id) != Kind.MOMENTO) return
+        runCatching { Momento.faceTapped(c, id) }
+    }
+
     /** Learns the seat from a tap, and redraws the widget if it moved. */
     fun seatFrom(c: Context, i: Intent) {
         val id = i.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
