@@ -466,8 +466,8 @@ class ConfigureActivity : Activity() {
             // Composed faces (21 Nov 2026): up to two notes along the foot
             if (!r.pinned) column.addView(card().apply {
                 val now = Momento.notes(me, id, r)
-                addView(row("Notes", "Up to two short notes along the foot: what else is worth knowing now, never what the face shows. Widgets under 190 dp tall keep their face whole." +
-                    (if (now.isNotEmpty()) "\nNow: " + now.joinToString("  ·  ") else ""),
+                addView(row("Notes", "A line or two underneath for anything else worth knowing today, such as your next event, rain later or sunset. Two on larger widgets, one on smaller ones, none on the smallest." +
+                    (if (now.isNotEmpty()) "\nShowing now: " + now.joinToString("  ·  ") else "\nNothing to add right now."),
                     toggle(Momento.notesOn(me, id), "Notes") { on -> Momento.setNotes(me, id, on); Widgets.later { Widgets.render(me, id) } }))
             })
             column.addView(eyebrow("Shows"))
