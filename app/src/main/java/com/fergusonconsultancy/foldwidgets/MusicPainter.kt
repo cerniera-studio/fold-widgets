@@ -46,6 +46,7 @@ object MusicPainter : Painter {
             Grammar.Shape.ROW -> if (h >= 220f) landscape(c, canvas, s, np) else stack(c, canvas, s, np)   // 4x2 and 3x2 on the cover: stack
             Grammar.Shape.SQUARE -> when {
                 minOf(w, h) < 150f -> cover(c, canvas, s, np)
+                minOf(w, h) >= 220f && h > w * 1.1f -> portrait(c, canvas, s, np)   // nearly a column: the artwork full width
                 minOf(w, h) >= 220f -> poster(c, canvas, s, np)
                 h > w -> slim(c, canvas, s, np)       // a little taller than wide: the column in miniature
                 else -> stack(c, canvas, s, np)       // 3x2 on the cover screen
