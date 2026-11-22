@@ -313,6 +313,8 @@ object Widgets {
             val bottom = if (scene.listBottom >= 0f) scene.listBottom else size.height - 6f
             val head = band(l.content, l.density, 0f, scene.listTop)
             val foot = band(l.content, l.density, bottom, size.height)
+            // Anything drawn beside the list (a wide agenda's date column) stays on the face itself
+            Canvas(bitmap).apply { clipRect(0f, scene.listTop * l.density, bitmap.width.toFloat(), bottom * l.density); drawBitmap(l.content, 0f, 0f, null) }
             l.content.recycle()
             val dip = TypedValue.COMPLEX_UNIT_DIP
             rv.setViewLayoutHeight(R.id.head, scene.listTop, dip)
@@ -431,7 +433,7 @@ object Widgets {
     fun paintFace(c: Context, id: Int, kind: Kind, canvas: Canvas, surface: Surface): Scene {
         val k = kind.scaleFor(surface.w, surface.h)
         if (k == 1f) return kind.painter.paint(c, id, canvas, surface).let {
-            if (it.listTop < 0f) it else Scene(it.hits, it.line, it.listTop, it.listBottom, 1f, surface.h)
+            if (it.listTop < 0f || it.listFaceH > 0f) it else Scene(it.hits, it.line, it.listTop, it.listBottom, 1f, surface.h)
         }
         canvas.save(); canvas.scale(k, k)
         val inner = kind.painter.paint(c, id, canvas, surface.scaled(k))

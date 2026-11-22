@@ -309,7 +309,15 @@ object WeatherPainter : Painter {
         // The sky gives way to the hours when there is room for one but not both
         val rest = s.w - p - x
         val hoursWanted = on(WeatherOptions.Item.HOURLY) || on(WeatherOptions.Item.WEEK)
+        val hoursFit = hoursWanted && rest - g - 18f >= 2 * 46f
         if (rest >= g && !(hoursWanted && rest >= 2 * 46f && rest - g - 18f < 2 * 46f)) {
+            if (!hoursFit) {
+                // Nothing follows the sky (22 Nov 2026): it takes the far end, larger, so no empty band is left
+                val gg = minOf(s.h * 0.5f, rest * 0.8f, 72f)
+                val gx = s.w - p - gg / 2
+                Glyphs.sky(cv, sky, fc.day, gx, s.h / 2, gg, s.ink(gx, s.h / 2), s.accent(gx, s.h / 2))
+                return
+            }
             Glyphs.sky(cv, sky, fc.day, x + g / 2, s.h / 2, g, s.ink(x + g / 2, s.h / 2), s.accent(x + g / 2, s.h / 2))
             x += g + 18f
         }
@@ -340,14 +348,14 @@ object WeatherPainter : Painter {
             if (!any && s.h >= 150f && s.w >= 120f) { hero(c, cv, s, fc, place, p, on); return }
         }
         val headBottom = header(c, cv, s, fc, place, p, p, headRight, null, on)
-        if (headBottom < 0f) return
+        if (headBottom < 0f && !split) return
         if (split) {
             val x = headRight + 10f
             val rule = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = s.hairline; color = s.faint(x, s.h / 2) }
             cv.drawLine(x, p + 4f, x, s.h - p - 4f, rule)
             // The hours and the week beside the minimum; the details beneath it
             modules(c, cv, s, fc, x + 14f, s.w - p, p, s.h - p, on, divideFirst = false, allowed = setOf(Module.HOURS, Module.WEEK))
-            modules(c, cv, s, fc, p, headRight, headBottom + 6f, s.h - p, on, divideFirst = true, allowed = setOf(Module.DETAILS))
+            if (headBottom >= 0f) modules(c, cv, s, fc, p, headRight, headBottom + 6f, s.h - p, on, divideFirst = true, allowed = setOf(Module.DETAILS))
         } else modules(c, cv, s, fc, p, s.w - p, headBottom + 6f, s.h - p, on, divideFirst = true)
     }
 

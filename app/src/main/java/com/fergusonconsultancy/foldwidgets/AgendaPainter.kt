@@ -180,7 +180,10 @@ object AgendaPainter : Painter {
         // The date
         val cal = Calendar.getInstance()
         val num = cal.get(Calendar.DAY_OF_MONTH).toString()
-        val numP = c.ink(if (tall) 42f else if (bare) 26f else 34f, s.ink(p + 20f, p + 18f), display = true)
+        // Wide (22 Nov 2026): the left column was the date in its corner over an empty band. Now it is
+        // a calendar page: the day's figure as large as the column allows, the day and month beneath
+        val pageSize = if (wide) ((s.w * 0.34f - 2 * p) * 0.62f).coerceIn(34f, minOf(110f, (s.h - 2 * p) * 0.55f)) else 0f
+        val numP = c.ink(if (wide && !bare) pageSize else if (tall) 42f else if (bare) 26f else 34f, s.ink(p + 20f, p + 18f), display = true)
         canvas.textTop(num, p, p, numP)
         val capNum = capHeight(numP)
         val numW = numP.measureText(num)
@@ -189,7 +192,12 @@ object AgendaPainter : Painter {
         val dayP = c.ink(if (bare) 13f else 15f, s.ink(tx + 30f, p + 6f), 600)
         val monthP = c.meta(s.muted(tx + 30f, p + capNum), 1f, 13f)
         if (bare) canvas.drawText(fit(SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.time), dayP, headW), tx, p + capNum, dayP)
-        else {
+        else if (wide) {
+            val colW = s.w * 0.34f - p - 8f
+            val y0 = p + capNum + 14f
+            canvas.textTop(fit(SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.time), dayP, colW), p, y0, dayP)
+            canvas.textTop(fit(SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time), monthP, colW), p, y0 + dayP.textSize * 1.35f, monthP)
+        } else {
             canvas.textTop(fit(SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.time), dayP, headW), tx, p + 1f, dayP)
             canvas.drawText(fit(SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time), monthP, headW), tx, p + capNum, monthP)
         }

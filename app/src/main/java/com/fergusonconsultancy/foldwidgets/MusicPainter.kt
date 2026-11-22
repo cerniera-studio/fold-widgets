@@ -100,7 +100,8 @@ object MusicPainter : Painter {
         val r = 25f * k
         val footTop = s.h - p - 2 * r
         val base = 20f * k
-        val a = minOf((s.w - 2 * p) * 0.5f, footTop - p - 2 * base * 1.2f - 24f * k).coerceAtLeast(40f * k)
+        // Larger squares (22 Nov 2026): the artwork takes more of the width, so no band is left between it and the title
+        val a = minOf((s.w - 2 * p) * (if (minOf(s.w, s.h) >= 300f) 0.62f else 0.5f), footTop - p - 2 * base * 1.2f - 24f * k).coerceAtLeast(40f * k)
         val art = RectF(p, p, p + a, p + a)
         artwork(cv, art, np, s, 14f * k)
         val x0 = art.right + 14f * k
@@ -304,7 +305,7 @@ object MusicPainter : Painter {
         val room = footTop - 10f * k - (p + a + 10f * k)
         var chosen: Pair<android.text.TextPaint, List<String>>? = null
         // As many whole-word lines as the room holds (up to six), at the largest size that fits
-        for (size in listOf(18f, 17f, 16f, 15f, 14f, 13f).map { it * k }) {
+        for (size in listOf(26f, 24f, 22f, 20f, 18f, 17f, 16f, 15f, 14f, 13f).map { it * k }) {
             val tp = c.ink(size, colour, 600)
             val most = ((room - 4f * k - artistP.textSize * 1.2f) / (size * 1.2f)).toInt().coerceIn(1, 6)
             if (fitsWhole(text, tp, width, most)) { val l = wrap(text, tp, width, most); if (block(size, l.size) <= room) { chosen = tp to l; break } }
