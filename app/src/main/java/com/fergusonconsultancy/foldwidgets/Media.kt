@@ -55,7 +55,7 @@ object Media {
     private fun component(c: Context) = ComponentName(c, MediaListener::class.java)
 
     /** Whether the user has allowed this app to see media sessions (via notification access). */
-    fun allowed(c: Context): Boolean =
+    fun allowed(c: Context): Boolean = Sample.on ||
         c.getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(component(c))
 
     fun controllers(c: Context): List<MediaController> = runCatching {
@@ -138,6 +138,7 @@ object Media {
     private var artCache: Pair<String, Pair<Bitmap?, Int?>>? = null
 
     fun now(c: Context): NowPlaying? {
+        if (Sample.on) return Sample.music(c)
         val ctl = pick(followedControllers(c)) ?: return null
         val pkg = ctl.packageName
         if (lastPlayer(c) != pkg) Prefs.of(c).edit().putString("last_player", pkg).apply()

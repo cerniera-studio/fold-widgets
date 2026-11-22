@@ -26,6 +26,8 @@
         <package android:name="com.cerniera.nodo" />
         <!-- Dorso, whose read in progress Momento's note carries on -->
         <package android:name="com.cerniera.dorso" />
+        <!-- Riserva, whose gauge widget follows this app's look too (22 Nov 2026) -->
+        <package android:name="com.cerniera.riserva" />
         <!-- Cielo, offered as what the weather widget opens -->
         <package android:name="com.fergusonconsultancy.cielo" />
         <intent>

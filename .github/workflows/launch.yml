@@ -62,7 +62,9 @@ jobs:
         run: |
           [ -d shots ] || exit 0
           cd shots
-          git init -q -b screens-${{ matrix.name }}
+          # Branch runs keep their own screens branch, so two branches tested together don't overwrite each other
+          B=screens-${{ matrix.name }}; [ "$GITHUB_REF_NAME" = main ] || B="$B-$GITHUB_REF_NAME"
+          git init -q -b "$B"
           git config user.name "Fold Widgets shapes test"; git config user.email "actions@users.noreply.github.com"
           git add -A && git commit -qm "Screens from ${GITHUB_SHA::7}"
-          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" screens-${{ matrix.name }}
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" "$B"

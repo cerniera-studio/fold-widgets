@@ -16,18 +16,22 @@ import android.widget.RemoteViewsService
 class AgendaRows : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
         Rows(applicationContext, intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID),
-            intent.getFloatExtra(EXTRA_W, 0f), intent.getFloatExtra(EXTRA_H, 0f))
+            intent.getFloatExtra(EXTRA_W, 0f), intent.getFloatExtra(EXTRA_H, 0f),
+            intent.getFloatExtra(EXTRA_K, -1f), intent.getFloatExtra(EXTRA_FACE_H, -1f))
 
     companion object {
         /** The widget size (dp) a list is drawn for: each orientation has its own list. */
         const val EXTRA_W = "fw.rows.w"
         const val EXTRA_H = "fw.rows.h"
+        /** The scale the face drew its date at, and the face's height: the rows match them (22 Nov 2026). */
+        const val EXTRA_K = "fw.rows.k"
+        const val EXTRA_FACE_H = "fw.rows.faceh"
     }
 
     /** A day heading (with whether it is the first) or an event. */
     private class Row(val day: Int, val first: Boolean, val event: Occurrence?)
 
-    private class Rows(val c: Context, val id: Int, val w: Float, val h: Float) : RemoteViewsFactory {
+    private class Rows(val c: Context, val id: Int, val w: Float, val h: Float, val kk: Float, val faceH: Float) : RemoteViewsFactory {
         private var rows: List<Row> = emptyList()
         override fun onCreate() {}
         override fun onDestroy() {}
@@ -44,7 +48,8 @@ class AgendaRows : RemoteViewsService() {
         override fun getViewTypeCount() = 1
         override fun hasStableIds() = true
         override fun getItemId(position: Int): Long = rows.getOrNull(position)?.let { r -> r.event?.let { it.eventId * 31 + it.begin } ?: -r.day.toLong() } ?: position.toLong()
-        override fun getLoadingView(): RemoteViews? = null
+        // An empty row while a row is drawn, never the system's own "Loading…" in its own type (22 Nov 2026)
+        override fun getLoadingView(): RemoteViews = RemoteViews(c.packageName, R.layout.list_row)
 
         override fun getViewAt(position: Int): RemoteViews {
             val rv = RemoteViews(c.packageName, R.layout.list_row)
@@ -55,8 +60,10 @@ class AgendaRows : RemoteViewsService() {
                 else { val d = Backdrop.density(c); Widgets.Frame(Math.round(w * d), Math.round(h * d), d) }
             }
             val (d, px, _) = Widgets.drawn(frame)
-            val whole = Widgets.surfaceFor(c, id, frame)
-            val k = Kind.AGENDA.scaleFor(whole.w, whole.h)
+            val full = Widgets.surfaceFor(c, id, frame)
+            // The face the rows belong to: Momento draws its agenda above its notes, so it is shorter than the widget
+            val whole = if (faceH > 0f && faceH < full.h) com.cerniera.kit.Surface(full.finish, full.ground, full.w, faceH, full.radius, full.hairline) else full
+            val k = if (kk > 0f) kk else Kind.AGENDA.scaleFor(whole.w, whole.h)
             val s = whole.scaled(k)
             val st = AgendaPainter.rowStyle(c, s, Widgets.detailed(c, id))
             val hDp = st.height(r.event, r.first) * k

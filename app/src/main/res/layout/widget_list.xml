@@ -66,19 +66,41 @@
         android:layout_gravity="top|start" android:background="@drawable/hit" android:visibility="gone" />
 
 
-    <!-- The scrolling list (agenda): rows drawn as pictures, laid over the glass, above the touch
-         areas so it takes its own taps and swipes. Its edges fade as rows scroll past. -->
-    <ListView
-        android:id="@+id/list"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_gravity="top|start"
-        android:divider="@null"
-        android:dividerHeight="0dp"
-        android:scrollbars="none"
-        android:overScrollMode="never"
-        android:listSelector="@android:color/transparent"
-        android:requiresFadingEdge="vertical"
-        android:fadingEdgeLength="22dp"
-        android:cacheColorHint="@android:color/transparent" />
+    <!-- The head (the date), the scrolling list and the foot (Momento's notes), stacked by the
+         layout itself (22 Nov 2026), so the rows can never run over the date or under the notes,
+         whatever size the launcher shows the picture at. Head and foot are pictures shown 1:1
+         (matrix, never scaled); they take no touches, so the touch areas beneath still act. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/head"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:scaleType="matrix"
+            android:importantForAccessibility="no" />
+
+        <ListView
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none"
+            android:overScrollMode="never"
+            android:listSelector="@android:color/transparent"
+            android:requiresFadingEdge="vertical"
+            android:fadingEdgeLength="22dp"
+            android:cacheColorHint="@android:color/transparent" />
+
+        <ImageView
+            android:id="@+id/foot"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:scaleType="matrix"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
 </FrameLayout>

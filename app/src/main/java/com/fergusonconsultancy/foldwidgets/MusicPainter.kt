@@ -1,5 +1,6 @@
 package com.fergusonconsultancy.foldwidgets
 
+import com.cerniera.kit.Grammar
 import com.cerniera.kit.Surface
 import com.cerniera.kit.lum
 import android.content.Context
@@ -35,15 +36,21 @@ object MusicPainter : Painter {
         if (!Media.allowed(c)) return locked(c, canvas, s)
         val np = Media.now(c)
         val w = s.w; val h = s.h
-        return when {
-            w >= 90f && w < 220f && h >= w * 1.3f -> slim(c, canvas, s, np)
-            minOf(w, h) < 90f -> tile(c, canvas, s, np)
-            w > h * 2f -> wide(c, canvas, s, np)
-            w >= 220f && h >= 220f && h >= w * 1.3f -> portrait(c, canvas, s, np)
-            w >= 220f && h >= 220f && w >= h * 1.35f -> landscape(c, canvas, s, np)
-            w >= 220f && h >= 220f -> poster(c, canvas, s, np)
-            minOf(w, h) < 150f || (w < 170f && h < 220f) -> cover(c, canvas, s, np)
-            else -> stack(c, canvas, s, np)       // 4x2 and 3x2 on the cover screen
+        // The family's one shape test (Kit Grammar, 22 Nov 2026). Before it, a widget between
+        // shapes (about 180 x 225 dp on the main screen) fell through every test to the 4x2 stack:
+        // small artwork, two words, and an empty band down the middle.
+        return when (Grammar.shape(w, h)) {
+            Grammar.Shape.TILE -> tile(c, canvas, s, np)
+            Grammar.Shape.STRIP -> wide(c, canvas, s, np)
+            Grammar.Shape.COLUMN -> if (w < 220f) slim(c, canvas, s, np) else portrait(c, canvas, s, np)
+            Grammar.Shape.ROW -> if (h >= 220f) landscape(c, canvas, s, np) else stack(c, canvas, s, np)   // 4x2 and 3x2 on the cover: stack
+            Grammar.Shape.SQUARE -> when {
+                minOf(w, h) < 150f -> cover(c, canvas, s, np)
+                minOf(w, h) >= 220f && h > w * 1.1f -> portrait(c, canvas, s, np)   // nearly a column: the artwork full width
+                minOf(w, h) >= 220f -> poster(c, canvas, s, np)
+                h > w -> slim(c, canvas, s, np)       // a little taller than wide: the column in miniature
+                else -> stack(c, canvas, s, np)       // 3x2 on the cover screen
+            }
         }
     }
 
@@ -94,7 +101,8 @@ object MusicPainter : Painter {
         val r = 25f * k
         val footTop = s.h - p - 2 * r
         val base = 20f * k
-        val a = minOf((s.w - 2 * p) * 0.5f, footTop - p - 2 * base * 1.2f - 24f * k).coerceAtLeast(40f * k)
+        // Larger squares (22 Nov 2026): the artwork takes more of the width, so no band is left between it and the title
+        val a = minOf((s.w - 2 * p) * (if (minOf(s.w, s.h) >= 300f) 0.62f else 0.5f), footTop - p - 2 * base * 1.2f - 24f * k).coerceAtLeast(40f * k)
         val art = RectF(p, p, p + a, p + a)
         artwork(cv, art, np, s, 14f * k)
         val x0 = art.right + 14f * k
@@ -298,7 +306,7 @@ object MusicPainter : Painter {
         val room = footTop - 10f * k - (p + a + 10f * k)
         var chosen: Pair<android.text.TextPaint, List<String>>? = null
         // As many whole-word lines as the room holds (up to six), at the largest size that fits
-        for (size in listOf(18f, 17f, 16f, 15f, 14f, 13f).map { it * k }) {
+        for (size in listOf(26f, 24f, 22f, 20f, 18f, 17f, 16f, 15f, 14f, 13f).map { it * k }) {
             val tp = c.ink(size, colour, 600)
             val most = ((room - 4f * k - artistP.textSize * 1.2f) / (size * 1.2f)).toInt().coerceIn(1, 6)
             if (fitsWhole(text, tp, width, most)) { val l = wrap(text, tp, width, most); if (block(size, l.size) <= room) { chosen = tp to l; break } }
