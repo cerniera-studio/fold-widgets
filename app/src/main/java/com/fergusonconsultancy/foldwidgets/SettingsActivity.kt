@@ -453,7 +453,10 @@ class ConfigureActivity : Activity() {
             column.addView(eyebrow("Now"))
             val why = when {
                 r.pinned -> "Pinned to ${r.face.name.lowercase()}."
+                r.swapped -> "${r.face.name.lowercase().replaceFirstChar { it.uppercase() }}: you tapped its note. Back to the moment at " +
+                    java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(Momento.swapEnds(me, id) ?: System.currentTimeMillis())) + "."
                 r.offered != null -> "${r.face.name.lowercase().replaceFirstChar { it.uppercase() }}: ${r.offered.kind.label.lowercase()}, ${r.offered.percent}%. ${r.offered.why}."
+                r.learned -> "${r.face.name.lowercase().replaceFirstChar { it.uppercase() }}: nothing is sure enough to change it, and you usually want this at this time."
                 else -> "The month: nothing is sure enough (60%) to change it."
             }
             column.addView(label(why, 15f, Palette.IVORY).apply { setPadding(px(4), 0, px(4), px(8)) })
@@ -467,8 +470,20 @@ class ConfigureActivity : Activity() {
             if (!r.pinned) column.addView(card().apply {
                 val now = Momento.notes(me, id, r)
                 addView(row("Notes", "A line or two underneath for anything else worth knowing today, such as your next event, rain later or sunset. Two on larger widgets, one on smaller ones, none on the smallest." +
-                    (if (now.isNotEmpty()) "\nShowing now: " + now.joinToString("  ·  ") else "\nNothing to add right now."),
+                    (if (now.isNotEmpty()) "\nShowing now: " + now.joinToString("  ·  ") { it.second } else "\nNothing to add right now.") +
+                    "\nTap a note to switch to it for half an hour.",
                     toggle(Momento.notesOn(me, id), "Notes") { on -> Momento.setNotes(me, id, on); Widgets.later { Widgets.render(me, id) } }))
+            })
+            // Learning (22 Nov 2026): what taps have taught it, and a reset
+            if (!r.pinned) column.addView(card().apply {
+                val learned = MomentoLearn.summary(me, { Momento.label(it) })
+                addView(row("What it has learned",
+                    "From your taps, on this phone only: opening the face means it was useful; tapping a note means you wanted that instead. " +
+                        "Kept for weekdays and weekends, and by time of day; older taps fade over a few weeks.\n" +
+                        (if (learned.isEmpty()) "Nothing yet: it needs a few taps at a time of day before it changes anything." else learned.joinToString("\n")),
+                    if (learned.isEmpty()) null else label("Reset", 14f, Palette.CHAMPAGNE, 500).apply {
+                        setOnClickListener { MomentoLearn.reset(me); Widgets.later { Widgets.renderAll(me, Kind.MOMENTO) }; recreate() }
+                    }))
             })
             column.addView(eyebrow("Shows"))
             val faces = listOf<Kind?>(null, Kind.AGENDA, Kind.MUSIC, Kind.WEATHER, Kind.MONTH)

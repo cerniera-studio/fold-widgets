@@ -17,6 +17,7 @@ class TapActivity : Activity() {
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
         Widgets.seatFrom(applicationContext, intent)
+        Widgets.momentoTap(applicationContext, intent)
         runCatching { go() }.onFailure { android.util.Log.w("FoldWidgets", "open", it) }
         finish()
         if (Build.VERSION.SDK_INT >= 34) overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0) else noTransition()
@@ -88,6 +89,14 @@ class TapActivity : Activity() {
 class TapReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         Widgets.seatFrom(c.applicationContext, i)
+        val action = i.action.orEmpty()
+        // A tap on one of Momento's notes: swap to its face, and learn
+        if (action.startsWith("$ACTION_NOTE:")) {
+            val id = i.getIntExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
+            if (id != -1) Momento.noteTapped(c.applicationContext, id, action.substringAfter(":"))
+            return
+        }
+        Widgets.momentoTap(c.applicationContext, i)
         when (i.action) {
             ACTION_PLAY -> Media.control(c, Media.Control.TOGGLE)
             ACTION_WEATHER -> {
@@ -104,5 +113,7 @@ class TapReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_PLAY = "com.fergusonconsultancy.foldwidgets.PLAY"
         const val ACTION_WEATHER = "com.fergusonconsultancy.foldwidgets.WEATHER"
+        /** Momento's notes: the action carries the note's moment after a colon. */
+        const val ACTION_NOTE = "com.fergusonconsultancy.foldwidgets.NOTE"
     }
 }
