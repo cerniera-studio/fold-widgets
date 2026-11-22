@@ -276,7 +276,14 @@ object Momento {
     const val NOTE_AT = 0.45f
 
     /** At most two notes for widget [id] beside the face [r] shows, most telling first. */
-    fun notes(c: Context, id: Int, r: Reading, now: Long = System.currentTimeMillis()): List<Pair<String, String>> {
+    fun notes(c: Context, id: Int, r: Reading, now: Long = System.currentTimeMillis()): List<Pair<String, String>> =
+        candidates(c, id, r, now).take(2)
+
+    /**
+     * Every note worth showing now, most telling first; [notes] takes the first two. Settings lists
+     * the rest as "Also waiting", so a note crowded out isn't mistaken for one missing.
+     */
+    fun candidates(c: Context, id: Int, r: Reading, now: Long = System.currentTimeMillis()): List<Pair<String, String>> {
         if (id < 0) sample?.let { l -> return l.mapIndexed { i, t -> (if (i == 0) "leaving_soon" else "sunset") to t } }
         if (r.pinned || !notesOn(c, id)) return emptyList()
         val s = signals(c, id, now)
@@ -312,11 +319,12 @@ object Momento {
             runCatching { com.cerniera.kit.Sky.day(s.place, today, zone).sunset?.toEpochMilli() }.getOrNull()
                 ?.takeIf { now < it && it - now < 3 * 3_600_000L }?.let { note("sunset", "Sunset ${hm(it)}") }
         }
-        // A knot due within two hours, then the read you're partway through: the quietest notes
-        if (k != null && !k.late) note(NODO_NOTE, "${hm(k.due)} · ${k.text}")
+        // The read you're partway through, then a knot not yet late (22 Nov 2026, Mechack: the read
+        // comes before a knot that can still wait)
         reading(c)?.let { d -> note(DORSO_NOTE, "Carry on · ${d.title} · ${d.minutesLeft} min left") }
+        if (k != null && !k.late) note(NODO_NOTE, "${hm(k.due)} · ${k.text}")
         // Never a note for what the face already is
-        return out.entries.filter { e -> Moments.of(e.key)?.let { FACE[it] } != r.face }.take(2).map { it.key to it.value }
+        return out.entries.filter { e -> Moments.of(e.key)?.let { FACE[it] } != r.face }.map { it.key to it.value }
     }
 
     object Painter : com.fergusonconsultancy.foldwidgets.Painter {
