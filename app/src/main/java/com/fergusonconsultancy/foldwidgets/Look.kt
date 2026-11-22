@@ -60,9 +60,10 @@ object Look {
     const val NODO = "com.cerniera.nodo"
     const val DORSO = "com.cerniera.dorso"
     /** The apps that follow this look: Nodo (14 Nov 2026) and Dorso's nightstand (21 Nov 2026). */
-    val FOLLOWERS = listOf(NODO, DORSO)
+    const val RISERVA = "com.cerniera.riserva"
+    val FOLLOWERS = listOf(NODO, DORSO, RISERVA)
 
-    fun appName(pkg: String) = when (pkg) { NODO -> "Nodo"; DORSO -> "Dorso"; else -> pkg.substringAfterLast('.') }
+    fun appName(pkg: String) = when (pkg) { NODO -> "Nodo"; DORSO -> "Dorso"; RISERVA -> "Riserva"; else -> pkg.substringAfterLast('.') }
 
     /** Tells the followers the look (or the wallpaper behind it) changed, so they redraw. */
     fun changed(c: Context) {
