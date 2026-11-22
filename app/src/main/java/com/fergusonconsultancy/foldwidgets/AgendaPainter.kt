@@ -21,7 +21,7 @@ class Occurrence(val eventId: Long, val title: String, val begin: Long, val end:
 object Agenda {
     const val DAYS = 14
 
-    fun allowed(c: Context) = c.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+    fun allowed(c: Context) = Sample.on || c.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
     /** A day as a number that sorts, yyyymmdd. */
     fun dayKey(cal: Calendar) = cal.get(Calendar.YEAR) * 10000 + (cal.get(Calendar.MONTH) + 1) * 100 + cal.get(Calendar.DAY_OF_MONTH)
@@ -40,6 +40,7 @@ object Agenda {
     }
 
     private fun everything(c: Context): List<Occurrence> {
+        if (Sample.on) return Sample.agenda()
         if (!allowed(c)) return emptyList()
         val now = System.currentTimeMillis()
         val start = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }

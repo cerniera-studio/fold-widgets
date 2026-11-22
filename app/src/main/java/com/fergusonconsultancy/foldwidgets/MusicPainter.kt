@@ -1,5 +1,6 @@
 package com.fergusonconsultancy.foldwidgets
 
+import com.cerniera.kit.Grammar
 import com.cerniera.kit.Surface
 import com.cerniera.kit.lum
 import android.content.Context
@@ -35,15 +36,20 @@ object MusicPainter : Painter {
         if (!Media.allowed(c)) return locked(c, canvas, s)
         val np = Media.now(c)
         val w = s.w; val h = s.h
-        return when {
-            w >= 90f && w < 220f && h >= w * 1.3f -> slim(c, canvas, s, np)
-            minOf(w, h) < 90f -> tile(c, canvas, s, np)
-            w > h * 2f -> wide(c, canvas, s, np)
-            w >= 220f && h >= 220f && h >= w * 1.3f -> portrait(c, canvas, s, np)
-            w >= 220f && h >= 220f && w >= h * 1.35f -> landscape(c, canvas, s, np)
-            w >= 220f && h >= 220f -> poster(c, canvas, s, np)
-            minOf(w, h) < 150f || (w < 170f && h < 220f) -> cover(c, canvas, s, np)
-            else -> stack(c, canvas, s, np)       // 4x2 and 3x2 on the cover screen
+        // The family's one shape test (Kit Grammar, 22 Nov 2026). Before it, a widget between
+        // shapes (about 180 x 225 dp on the main screen) fell through every test to the 4x2 stack:
+        // small artwork, two words, and an empty band down the middle.
+        return when (Grammar.shape(w, h)) {
+            Grammar.Shape.TILE -> tile(c, canvas, s, np)
+            Grammar.Shape.STRIP -> wide(c, canvas, s, np)
+            Grammar.Shape.COLUMN -> if (w < 220f) slim(c, canvas, s, np) else portrait(c, canvas, s, np)
+            Grammar.Shape.ROW -> if (h >= 220f) landscape(c, canvas, s, np) else stack(c, canvas, s, np)   // 4x2 and 3x2 on the cover: stack
+            Grammar.Shape.SQUARE -> when {
+                minOf(w, h) < 150f -> cover(c, canvas, s, np)
+                minOf(w, h) >= 220f -> poster(c, canvas, s, np)
+                h > w -> slim(c, canvas, s, np)       // a little taller than wide: the column in miniature
+                else -> stack(c, canvas, s, np)       // 3x2 on the cover screen
+            }
         }
     }
 

@@ -42,6 +42,7 @@ class Day(val date: String, val code: Int, val max: Double, val min: Double, val
 object Weather {
 
     fun place(c: Context): Place? {
+        if (Sample.on) return Sample.place()
         val p = Prefs.of(c)
         val name = p.getString("place_name", null) ?: return null
         return Place(name, p.getFloat("place_lat", 0f).toDouble(), p.getFloat("place_lon", 0f).toDouble())
@@ -51,7 +52,7 @@ object Weather {
         .putString("place_name", place.name).putFloat("place_lat", place.lat.toFloat()).putFloat("place_lon", place.lon.toFloat())
         .remove("forecast").apply()
 
-    fun forecast(c: Context): Forecast? = runCatching { parse(JSONObject(Prefs.of(c).getString("forecast", null)!!)) }.getOrNull()
+    fun forecast(c: Context): Forecast? = if (Sample.on) Sample.forecast() else runCatching { parse(JSONObject(Prefs.of(c).getString("forecast", null)!!)) }.getOrNull()
 
     /**
      * Fetches and keeps the forecast. Network work: never on the main thread. Asks for everything
@@ -329,6 +330,15 @@ object WeatherPainter : Painter {
         // Wide and tall enough: the minimum in a left column, the modules beside it (31 Oct)
         val split = s.w >= 360f && s.h >= 200f && s.w >= s.h * 1.4f
         val headRight = if (split) s.w * 0.42f else s.w - p
+        if (!split) {
+            // Rule 7 of the family's grammar (22 Nov 2026): no empty bands. Tried first on a canvas
+            // that keeps nothing; if no module would follow the minimum (all switched off, or no room
+            // for one), the minimum itself fills the widget instead of sitting in its top half.
+            val probe = Canvas(android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888))
+            val hb = header(c, probe, s, fc, place, p, p, headRight, null, on)
+            val any = hb >= 0f && modules(c, probe, s, fc, p, s.w - p, hb + 6f, s.h - p, on, divideFirst = true)
+            if (!any && s.h >= 150f && s.w >= 120f) { hero(c, cv, s, fc, place, p, on); return }
+        }
         val headBottom = header(c, cv, s, fc, place, p, p, headRight, null, on)
         if (headBottom < 0f) return
         if (split) {
@@ -419,6 +429,43 @@ object WeatherPainter : Painter {
         return if (bottom - end >= 3 * 26f + 14f) end else -1f
     }
 
+    /**
+     * The minimum, filling the widget (22 Nov 2026): place and conditions at the top, the sky at the
+     * top right, and the temperature as the widget's one large figure resting on the foot, as large
+     * as the room allows, with today's range and how it feels beneath it.
+     */
+    private fun hero(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, on: (WeatherOptions.Item) -> Boolean) {
+        val (words, sky) = Weather.describe(fc.code)
+        val k = com.cerniera.kit.Grammar.scale(s.w, s.h)
+        val w = s.w - 2 * p
+        val g = (minOf(w, s.h) * 0.26f).coerceIn(28f, 96f)
+        val gx = s.w - p - g / 2; val gy = p + g / 2
+        Glyphs.sky(cv, sky, fc.day, gx, gy, g, s.ink(gx, gy), s.accent(gx, gy))
+        val textW = w - g - 8f
+        val placeP = c.heading(s.ink(p + textW / 2, p + 6f), k)
+        val wordsP = c.meta(s.muted(p + textW / 2, p + 26f), k, 13f)
+        cv.textTop(fit(place.name, placeP, textW), p, p, placeP)
+        cv.textTop(fit(words, wordsP, textW), p, p + placeP.textSize * 1.4f, wordsP)
+        val top = p + maxOf(placeP.textSize * 1.4f + wordsP.textSize * 1.3f, g) + 10f * k
+        val parts = ArrayList<String>()
+        if (on(WeatherOptions.Item.RANGE)) parts += "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}"
+        if (on(WeatherOptions.Item.FEELS) && fc.feels != null) parts += "Feels like ${Weather.deg(fc.feels)}"
+        val lineP = c.meta(s.muted(p + w / 2, s.h - p - 6f), k)
+        val lineH = if (parts.isEmpty()) 0f else lineP.textSize * 1.6f
+        val bottom = s.h - p - lineH
+        val temp = Weather.deg(fc.temp)
+        // As large as fits both the height left and the width
+        var size = 200f * k
+        var tp = c.ink(size, s.ink(p + w / 3, (top + bottom) / 2), display = true)
+        while (size > 24f && (capHeight(tp) > bottom - top || tp.measureText(temp) > w)) { size -= 2f; tp = c.ink(size, tp.color, display = true) }
+        cv.drawText(temp, p - size * 0.03f, bottom, tp)
+        if (parts.isNotEmpty()) {
+            var text = parts.joinToString("   ·   ")
+            if (lineP.measureText(text) > w) text = parts.first()
+            cv.drawText(fit(text, lineP, w), p, s.h - p, lineP)
+        }
+    }
+
     private enum class Module { HOURS, WEEK, DETAILS }
 
     /**
@@ -428,7 +475,7 @@ object WeatherPainter : Painter {
      * with a gap at the foot.
      */
     private fun modules(c: Context, cv: Canvas, s: Surface, fc: Forecast, left: Float, right: Float, top0: Float, bottom: Float,
-                        on: (WeatherOptions.Item) -> Boolean, divideFirst: Boolean, allowed: Set<Module> = Module.entries.toSet()) {
+                        on: (WeatherOptions.Item) -> Boolean, divideFirst: Boolean, allowed: Set<Module> = Module.entries.toSet()): Boolean {
         val w = right - left
         val tiles = WeatherOptions.DETAILS.filter { on(it) }.mapNotNull { item -> value(c, fc, item)?.let { item to it } }
         val cols = when { w >= 330f -> 3; w >= 180f -> 2; else -> 1 }
@@ -453,7 +500,7 @@ object WeatherPainter : Painter {
                 }
             }
         }
-        if (plan.isEmpty()) return
+        if (plan.isEmpty()) return false
         // Room left once every wanted module is placed (1 Nov: the tallest widget ended in an empty
         // band). The modules breathe first: hour columns, week rows and detail tiles all grow by
         // the same proportion, up to a third; only then is any remainder shared between the gaps.
@@ -487,6 +534,7 @@ object WeatherPainter : Painter {
             }
             y += 4f + extra / 2f
         }
+        return true
     }
 
     // ---- Modules -------------------------------------------------------------------------------

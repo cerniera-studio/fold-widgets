@@ -10,6 +10,14 @@ sleep 30
 adb install -r "$APK"
 adb logcat -c
 mkdir -p shots
+# Every widget by its own painter over sample content, at the size matrix, and the picker's previews (22 Nov 2026)
+adb shell am start -W -n $PKG/.SettingsActivity --es open matrix >/dev/null
+for i in $(seq 1 90); do adb shell run-as $PKG ls files/matrix.done >/dev/null 2>&1 && break; sleep 2; done
+for d in matrix previews; do
+  mkdir -p shots/$d
+  for f in $(adb shell run-as $PKG ls files/$d 2>/dev/null | tr -d '\r'); do adb exec-out run-as $PKG cat files/$d/$f > shots/$d/$f; done
+done
+echo "matrix: $(ls shots/matrix | wc -l) pictures, previews: $(ls shots/previews | wc -l)"
 shot() { adb exec-out screencap -p > "shots/$1.png"; echo "shot $1"; }
 open() { adb shell am force-stop $PKG; adb shell am start -W -n $PKG/.SettingsActivity ${1:+--es open $1} >/dev/null; sleep 6; }
 shape() {  # name WxH dpi

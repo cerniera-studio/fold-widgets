@@ -129,6 +129,7 @@ object Momento {
                   val swapped: Boolean = false, val learned: Boolean = false)
 
     fun read(c: Context, id: Int, now: Long = System.currentTimeMillis()): Reading {
+        if (Sample.on && id < 0) return Reading(emptyList(), null, Kind.AGENDA, false)
         pinned(c, id)?.let { return Reading(emptyList(), null, it, true) }
         // Senso's moments, each moved by what Momento has learned for this slot of the week
         val moments = Rules.read(signals(c, id, now), now).filter { it.kind in KINDS }.map { m ->
@@ -320,7 +321,7 @@ object Momento {
 
     object Painter : com.fergusonconsultancy.foldwidgets.Painter {
         private const val ROW = 20f
-        private const val INSET = 16f
+        private const val INSET = 14f   // the family's one inset (Kit Grammar)
 
         override fun paint(c: Context, id: Int, canvas: android.graphics.Canvas, s: com.cerniera.kit.Surface): Scene {
             val r = read(c, id)
@@ -369,7 +370,7 @@ object Momento {
                     else Hit(area, Act.Send(TapReceiver.ACTION_NOTE + ":" + key), n)
             }
             // The face's own touch areas, then the notes', within the widget's twelve
-            return Scene((scene.hits.take(12 - hits.size) + hits), scene.line, scene.listTop, if (scene.listTop >= 0f) s.h - band else -1f)
+            return Scene((scene.hits.take(12 - hits.size) + hits), scene.line, scene.listTop, if (scene.listTop >= 0f) s.h - band else -1f, scene.listScale, scene.listFaceH)
         }
     }
 }

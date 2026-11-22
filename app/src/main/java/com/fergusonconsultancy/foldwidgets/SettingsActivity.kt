@@ -45,6 +45,11 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
         // Debug builds only: every widget drawn as held upright and turned sideways, for the launch test
         if (intent.getStringExtra("open") == "preview" && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) preview = true
+        // Debug builds only: the size matrix and the picker's previews, written to files for the test (22 Nov 2026)
+        if (intent.getStringExtra("open") == "matrix" && debuggable) Thread {
+            runCatching { Matrix.render(this) }.onFailure { android.util.Log.e("FoldWidgets", "matrix", it) }
+            java.io.File(filesDir, "matrix.done").writeText("1")
+        }.start()
         // Debug builds only, for the windows test: --es search <words> fills the weather search once,
         // as if typed (only on a fresh start, so a rebuild can't simply put it back)
         if (saved == null && debuggable) intent.getStringExtra("search")?.let { query = it; intent.removeExtra("search") }

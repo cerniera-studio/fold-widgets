@@ -38,7 +38,10 @@ class Line(val rect: RectF, val value: Float, val track: Int, val fill: Int)
 /** What a painter leaves besides the picture: where touches go, and the line if there is one. */
 /** [listTop]: where a scrolling list of rows begins, in dp, for widgets whose content scrolls (agenda). */
 /** [listBottom]: where that list ends, when something is drawn beneath it (Momento's notes); -1 for the foot. */
-class Scene(val hits: List<Hit>, val line: Line? = null, val listTop: Float = -1f, val listBottom: Float = -1f)
+/** [listScale] and [listFaceH]: the scale the list's rows are drawn at, and the height of the face they belong to (22 Nov 2026:
+ *  Momento's agenda face, drawn above its notes, had set its date at one scale while its rows took another). */
+class Scene(val hits: List<Hit>, val line: Line? = null, val listTop: Float = -1f, val listBottom: Float = -1f,
+            val listScale: Float = 1f, val listFaceH: Float = -1f)
 
 /** Paints one kind of widget on a canvas measured in dp, over its finish. */
 interface Painter {
@@ -58,7 +61,8 @@ enum class Kind(val painter: Painter) {
      * again. Music, weather and month scale within their own layouts.
      */
     fun scaleFor(w: Float, h: Float): Float = when (this) {
-        AGENDA -> minOf(w / 300f, h / 300f).coerceIn(1f, 1.5f)
+        // The family's one scale (Kit Grammar, 22 Nov 2026): 1 to a short side of 240 dp, then up to 1.5
+        AGENDA -> com.cerniera.kit.Grammar.scale(w, h)
         else -> 1f
     }
 }
@@ -109,7 +113,7 @@ object Widgets {
      * Which entry in the picker a widget was added from (1 Nov): each entry is a real variant,
      * not only a starting size, so what its name promises holds at every size it is resized to.
      */
-    fun variant(c: Context, id: Int): String =
+    fun variant(c: Context, id: Int): String = Matrix.variantOf(id) ?:
         runCatching { AppWidgetManager.getInstance(c).getAppWidgetInfo(id)?.provider?.className?.substringAfterLast('.') }.getOrNull().orEmpty()
     fun detailed(c: Context, id: Int) = variant(c, id) == "AgendaLarge"
     fun titled(c: Context, id: Int) = variant(c, id) == "MonthLarge"
@@ -146,6 +150,9 @@ object Widgets {
         val m = AppWidgetManager.getInstance(c)
         return providers.getValue(kind).flatMap { m.getAppWidgetIds(ComponentName(c, it)).toList() }.toIntArray()
     }
+
+    /** The kind a provider class (by simple name) draws. */
+    fun kindForClass(cls: String): Kind? = providers.entries.firstOrNull { (_, list) -> list.any { it.simpleName == cls } }?.key
 
     fun kindOf(c: Context, id: Int): Kind? {
         val name = AppWidgetManager.getInstance(c).getAppWidgetInfo(id)?.provider?.className ?: return null
@@ -291,17 +298,32 @@ object Widgets {
         // Momento is drawn by its own painter, which lays out the face and its notes (21 Nov 2026:
         // drawing the face directly had left the notes out of every real widget)
         val drawn = if (kindOf(c, id) == Kind.MOMENTO) Kind.MOMENTO else kind
-        val (bitmap, scene) = draw(c, id, drawn, frame, Prefs.finish(c, id), ground)
+        val l = layers(c, id, drawn, frame, Prefs.finish(c, id), ground)
+        val scene = l.scene
         val listed = scene.listTop >= 0f
+        val bitmap = l.finish
         val rv = RemoteViews(c.packageName, if (listed) R.layout.widget_list else R.layout.widget)
+        if (!listed) { Canvas(bitmap).drawBitmap(l.content, 0f, 0f, null); l.content.recycle() }
         if (listed) {
-            // A scrolling list of rows over the picture, filled by AgendaRows, each row its own picture,
-            // drawn for this orientation's width
-            place(rv, R.id.list, RectF(0f, scene.listTop, size.width, if (scene.listBottom >= 0f) scene.listBottom else size.height - 6f))
+            // 22 Nov 2026: the date and Momento's notes had been part of the one picture, with the list
+            // laid over it by margins. When the launcher showed the picture at another size than the
+            // list (a Smart Launcher stack), the rows ran over the date and under the notes. Now the
+            // head and the foot are pictures of their own, shown 1:1, stacked with the list between
+            // them by the layout itself, so they can never overlap whatever size the launcher picks.
+            val bottom = if (scene.listBottom >= 0f) scene.listBottom else size.height - 6f
+            val head = band(l.content, l.density, 0f, scene.listTop)
+            val foot = band(l.content, l.density, bottom, size.height)
+            l.content.recycle()
+            val dip = TypedValue.COMPLEX_UNIT_DIP
+            rv.setViewLayoutHeight(R.id.head, scene.listTop, dip)
+            rv.setViewLayoutHeight(R.id.foot, size.height - bottom, dip)
+            if (head != null) rv.setImageViewBitmap(R.id.head, head)
+            if (foot != null) rv.setImageViewBitmap(R.id.foot, foot)
             rv.setRemoteAdapter(R.id.list, Intent(c, AgendaRows::class.java)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                 .putExtra(AgendaRows.EXTRA_W, key.width).putExtra(AgendaRows.EXTRA_H, key.height)
-                .setData(Uri.parse("foldwidgets://rows/$id/${key.width.toInt()}x${key.height.toInt()}")))
+                .putExtra(AgendaRows.EXTRA_K, scene.listScale).putExtra(AgendaRows.EXTRA_FACE_H, scene.listFaceH)
+                .setData(Uri.parse("foldwidgets://rows/$id/${key.width.toInt()}x${key.height.toInt()}/${scene.listFaceH.toInt()}")))
             rv.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(c, id * 32 + 31,
                 Intent(c, TapActivity::class.java).setData(Uri.parse("foldwidgets://row/$id"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
@@ -378,19 +400,39 @@ object Widgets {
     }
 
     fun draw(c: Context, id: Int, kind: Kind, frame: Frame, finish: Finish, ground: Ground): Pair<Bitmap, Scene> {
+        val l = layers(c, id, kind, frame, finish, ground)
+        Canvas(l.finish).drawBitmap(l.content, 0f, 0f, null)
+        l.content.recycle()
+        return l.finish to l.scene
+    }
+
+    /** A widget's picture in two layers: the finish alone, and everything painted on it. */
+    class Layers(val finish: Bitmap, val content: Bitmap, val scene: Scene, val density: Float)
+
+    fun layers(c: Context, id: Int, kind: Kind, frame: Frame, finish: Finish, ground: Ground): Layers {
         val (d, px, py) = drawn(frame)
         val size = SizeF(px / d, py / d)
-        val bmp = Bitmap.createBitmap(px, py, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp).apply { scale(d, d) }
         val surface = Surface(finish, ground, size.width, size.height, Prefs.radius(c).toFloat().coerceAtMost(minOf(size.width, size.height) / 2f), 1.1f / d)
-        surface.paint(canvas)
-        return bmp to paintFace(c, id, kind, canvas, surface)
+        val back = Bitmap.createBitmap(px, py, Bitmap.Config.ARGB_8888)
+        surface.paint(Canvas(back).apply { scale(d, d) })
+        val front = Bitmap.createBitmap(px, py, Bitmap.Config.ARGB_8888)
+        val scene = paintFace(c, id, kind, Canvas(front).apply { scale(d, d) }, surface)
+        return Layers(back, front, scene, d)
+    }
+
+    /** Rows [top] to [bottom] (dp) of [b], drawn at density [d], as a picture shown 1:1 at its dp size. */
+    private fun band(b: Bitmap, d: Float, top: Float, bottom: Float): Bitmap? {
+        val y0 = Math.round(top * d).coerceIn(0, b.height); val y1 = Math.round(bottom * d).coerceIn(0, b.height)
+        if (y1 - y0 < 1) return null
+        return Bitmap.createBitmap(b, 0, y0, b.width, y1 - y0).also { it.density = Math.round(d * 160f) }
     }
 
     /** Paints [kind] on [surface], scaled as that kind scales at this size (the agenda grows on large widgets). */
     fun paintFace(c: Context, id: Int, kind: Kind, canvas: Canvas, surface: Surface): Scene {
         val k = kind.scaleFor(surface.w, surface.h)
-        if (k == 1f) return kind.painter.paint(c, id, canvas, surface)
+        if (k == 1f) return kind.painter.paint(c, id, canvas, surface).let {
+            if (it.listTop < 0f) it else Scene(it.hits, it.line, it.listTop, it.listBottom, 1f, surface.h)
+        }
         canvas.save(); canvas.scale(k, k)
         val inner = kind.painter.paint(c, id, canvas, surface.scaled(k))
         canvas.restore()
@@ -398,7 +440,7 @@ object Widgets {
         return Scene(inner.hits.map { Hit(it.rect.up(), it.act, it.label) },
             inner.line?.let { Line(it.rect.up(), it.value, it.track, it.fill) },
             if (inner.listTop >= 0f) inner.listTop * k else -1f,
-            if (inner.listBottom >= 0f) inner.listBottom * k else -1f)
+            if (inner.listBottom >= 0f) inner.listBottom * k else -1f, k, surface.h)
     }
 
     private fun place(rv: RemoteViews, viewId: Int, r: RectF) {
