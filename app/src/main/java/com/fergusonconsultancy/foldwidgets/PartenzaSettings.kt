@@ -34,8 +34,12 @@ fun Activity.partenzaSection(column: LinearLayout, rebuild: () -> Unit) {
                 "${d.where} · ${d.delayMin} min of the drive is traffic · ${d.bufferMin} min buffer · from ${d.from} · checked ${PartenzaRules.clock(d.checkedAt, zone)}"
         }
         addView(row(title, note, if (Partenza.on(me)) button("Check now", primary = false) {
-            Partenza.schedule(me, now = true)
-            android.widget.Toast.makeText(me, "Checking. The result arrives in the log in a moment.", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(me, "Checking…", android.widget.Toast.LENGTH_SHORT).show()
+            // Right here, with the app open: no waiting on a background job
+            Thread {
+                runCatching { Partenza.check(me, "Check now") }
+                runOnUiThread { if (!isFinishing && !isDestroyed) rebuild() }
+            }.start()
         } else null))
     })
 
@@ -43,7 +47,7 @@ fun Activity.partenzaSection(column: LinearLayout, rebuild: () -> Unit) {
     column.addView(card().apply {
         val key = Partenza.key(me)
         if (key != null) {
-            addView(row("TomTom key", "Ending ${key.takeLast(4)}. Kept on this phone only. Partenza uses TomTom's Routing API, and its Search API when the phone can't find a place itself.",
+            addView(row("TomTom key", "${key.length} characters, ending ${key.takeLast(4)}. Kept on this phone only. Partenza uses TomTom's Routing API, and its Search API when the phone can't find a place itself.",
                 button("Remove", primary = false) { Partenza.setKey(me, null); rebuild() }))
         } else {
             addView(row("TomTom key", "From developer.tomtom.com: sign in, open Keys, and copy the key with the Routing and Search APIs. Paste it here; it stays on this phone.", null))
