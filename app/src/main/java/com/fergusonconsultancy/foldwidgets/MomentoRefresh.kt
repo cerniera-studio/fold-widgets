@@ -6,7 +6,8 @@ import android.content.Intent
 
 /**
  * Nodo (a knot tied, moved or done) and Dorso (a read left) say something changed: Momento looks
- * again, so its notes keep up (22 Nov 2026). Only ever a redraw, so any app may send it.
+ * again, so its notes keep up (22 Nov 2026). Only ever a redraw, so any app may send it. Partenza
+ * sends it too when its leave-by changes (24 Nov 2026).
  */
 class MomentoRefresh : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {

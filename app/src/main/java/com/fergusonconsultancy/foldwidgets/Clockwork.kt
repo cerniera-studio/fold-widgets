@@ -23,6 +23,8 @@ class Clockwork : BroadcastReceiver() {
             // Every widget: the agenda and month move on, and the glass's light follows the hour
             Widgets.renderAll(c)
             if (i.action != ACTION_TICK) RefreshJob.schedule(c)
+            // Partenza's re-checks are persisted jobs; after an update they are armed again here
+            if (i.action != ACTION_TICK) runCatching { com.cerniera.kit.Partenza.schedule(c) }
             arm(c)
         }
     }
