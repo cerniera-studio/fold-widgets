@@ -59,7 +59,7 @@ class RefreshJob : JobService() {
             try {
                 when (params.jobId) {
                     WEATHER, WEATHER_NOW -> { runCatching { Weather.refresh(this) }; Widgets.renderAll(this, Kind.WEATHER); Widgets.renderAll(this, Kind.MOMENTO); Clockwork.arm(this) }
-                    CALENDAR -> { Widgets.renderAll(this, Kind.AGENDA); Widgets.renderAll(this, Kind.MONTH); Widgets.renderAll(this, Kind.MOMENTO); Clockwork.arm(this) }
+                    CALENDAR -> { runCatching { com.cerniera.kit.Partenza.calendarChanged(this) }; Widgets.renderAll(this, Kind.AGENDA); Widgets.renderAll(this, Kind.MONTH); Widgets.renderAll(this, Kind.MOMENTO); Clockwork.arm(this) }
                 }
             } finally { jobFinished(params, false) }
         }.start()
