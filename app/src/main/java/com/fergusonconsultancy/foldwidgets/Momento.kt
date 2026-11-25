@@ -121,6 +121,8 @@ object Momento {
         playing = playing(c, now), headphones = headphones(c), charging = charging(c),
         event = event(c, id, now), rain = rain(c, now),
         occasion = occasion(c, id, now), place = sky(c),
+        // Partenza's leave-by, worked out in this app (24 Nov 2026)
+        leave = runCatching { com.cerniera.kit.Partenza.stored(c) }.getOrNull(),
     )
 
     /** What widget [id] reads now: every moment, the one offered, and the face it shows. */
@@ -160,6 +162,11 @@ object Momento {
         if (ids.isEmpty()) return Long.MAX_VALUE
         val times = mutableListOf<Long>()
         ids.forEach { id -> event(c, id, now)?.let { e -> times += e.start - 45 * 60_000L; times += e.start } }
+        // Partenza: leaving soon begins 45 minutes before leave-by; ten and five before, and at it, the face will tighten
+        runCatching { com.cerniera.kit.Partenza.stored(c) }.getOrNull()?.let { d ->
+            listOf(45, 10, 5, 0).forEach { m -> times += d.leaveBy - m * 60_000L }
+            times += d.checkedAt + com.cerniera.kit.PartenzaRules.STALE + 1_000L
+        }
         rain(c, now)?.let { r -> times += r.startsAt - 2 * 3_600_000L; times += r.startsAt - 3_600_000L; times += r.startsAt + 15 * 60_000L }
         // A paused track keeps the music face for Rules.PAUSE_GRACE, then gives way
         playing(c, now)?.takeIf { !it.playing }?.let { p -> times += p.since + Rules.PAUSE_GRACE + 1_000L }

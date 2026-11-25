@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- "Use my location" for the weather, asked only when that button is pressed -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Partenza (24 Nov 2026): re-checks while the app is closed start from where the phone is,
+         once "Allow all the time" is chosen in Settings; otherwise from the last place seen -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- The agenda -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Glass: since Android 13 the wallpaper image is only readable with all-files access -->
@@ -96,6 +99,13 @@
             android:authorities="com.fergusonconsultancy.foldwidgets.look"
             android:exported="true" />
 
+        <!-- Partenza (24 Nov 2026): this app works out leave-by for the family; Fold Taskbar's Lume
+             reads it here. Only Cerniera's own apps may read it (checked in the provider). -->
+        <provider
+            android:name="com.cerniera.kit.PartenzaProvider"
+            android:authorities="com.cerniera.partenza"
+            android:exported="true" />
+
         <receiver
             android:name=".TapReceiver"
             android:exported="false" />
@@ -104,7 +114,11 @@
         <receiver
             android:name=".MomentoRefresh"
             android:exported="true">
-            <intent-filter><action android:name="com.cerniera.MOMENTO_REFRESH" /></intent-filter>
+            <intent-filter>
+                <action android:name="com.cerniera.MOMENTO_REFRESH" />
+                <!-- Partenza's leave-by changed -->
+                <action android:name="com.cerniera.PARTENZA_CHANGED" />
+            </intent-filter>
         </receiver>
 
         <receiver

@@ -101,6 +101,7 @@ class SettingsActivity : Activity() {
         Widgets.later { Widgets.renderAll(this) }
         RefreshJob.schedule(this)
         Clockwork.arm(this)
+        com.cerniera.kit.Partenza.schedule(this)
     }
 
     override fun onSaveInstanceState(out: Bundle) {
@@ -186,6 +187,9 @@ class SettingsActivity : Activity() {
                     13f, Palette.MUTED).apply { setPadding(0, 0, 0, px(14)) })
             })
         }
+
+        // ---- Partenza (24 Nov 2026): leave by, hosted here for the family
+        partenzaSection(column) { build() }
 
         // ---- Icons: the marks in the widgets come from the home screen's icon pack
         val packs = Icons.packs(this)
@@ -403,6 +407,8 @@ class SettingsActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 2 && grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) useLocation()
+        // Partenza's location (31) or location all the time (32), or the calendar (1): look again now
+        if (requestCode == 31 || requestCode == 32 || requestCode == 1) com.cerniera.kit.Partenza.schedule(this, now = true)
         build()
         Clockwork.arm(this)
         Widgets.later { Widgets.renderAll(this) }
