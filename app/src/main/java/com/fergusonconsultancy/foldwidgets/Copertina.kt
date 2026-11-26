@@ -114,11 +114,16 @@ object Copertina {
  * how much saturated, mid-bright area carries them (the music widget's accent rule), in 24 buckets.
  * The first colour is the strongest hue; the second is the strongest hue at least 60° away that
  * holds a fifth as much, or else the first hue's darker side, so a one-colour sleeve stays one colour.
+ * Even a small patch of colour on a dark sleeve counts (see [GREY]).
  */
 object CopertinaRules {
     private const val BUCKETS = 24
-    /** Below this the artwork is grey: Solco keeps the real sky. */
-    private const val GREY = 18f
+    /**
+     * Below this the artwork is grey: Solco keeps the real sky. 4 (26 Nov, was 18): a patch of
+     * strong colour about a hundredth of a dark sleeve is enough, so a quiet song on a black cover
+     * still shows in the grain; a black-and-white photo's compression noise scores about 0.2.
+     */
+    private const val GREY = 4f
 
     fun palette(px: IntArray): IntArray? {
         val score = FloatArray(BUCKETS); val r = FloatArray(BUCKETS); val g = FloatArray(BUCKETS); val bl = FloatArray(BUCKETS)
