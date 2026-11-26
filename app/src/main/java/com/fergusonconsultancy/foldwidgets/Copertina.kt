@@ -47,9 +47,22 @@ object Copertina {
      * Called once the players' reports settle (MediaListener's redraw). Cheap when nothing changed:
      * the artwork and its colours are worked out once per track, in [Media.now].
      */
+    /** The track that was given a moment for its artwork to arrive (players often send the words first). */
+    @Volatile private var waited = ""
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
     fun update(c: Context) {
         val np = Media.now(c)
         val playing = np?.playing == true
+        // 26 Nov log: Spotify sends a new track without artwork, then the artwork a moment later.
+        // Wait up to 2.5 s for it rather than dropping Solco back to the finish and tinting again.
+        val track = np?.let { "${it.pkg}|${it.title}|${it.artist}|${it.album}" } ?: ""
+        if (playing && np?.art == null && waited != track) {
+            waited = track
+            val app = c.applicationContext
+            main.postDelayed({ Widgets.later { runCatching { update(app) } } }, 2500)
+            return
+        }
         val pal = if (playing) np?.art?.let { palette(it) } else null
         val a = pal?.get(0); val b = pal?.get(1)
         val player = np?.pkg ?: ""
@@ -61,6 +74,8 @@ object Copertina {
         log(c, buildString {
             append(if (playing) "playing" else "stopped")
             if (player.isNotEmpty()) append(" · ").append(player)
+            // Which track, so two sleeves giving the same colours can be told apart
+            if (playing && np != null) append(" · ").append(listOf(np.artist, np.title).filter { it.isNotBlank() }.joinToString(" – ").take(60))
             if (playing) {
                 append(" · ").append(if (np?.art == null) "no artwork" else source.ifEmpty { "artwork" })
                 append(" · ").append(if (a == null) "grey, no colours" else "#${hex(a)} #${hex(b ?: a)}")
@@ -99,11 +114,16 @@ object Copertina {
  * how much saturated, mid-bright area carries them (the music widget's accent rule), in 24 buckets.
  * The first colour is the strongest hue; the second is the strongest hue at least 60° away that
  * holds a fifth as much, or else the first hue's darker side, so a one-colour sleeve stays one colour.
+ * Even a small patch of colour on a dark sleeve counts (see [GREY]).
  */
 object CopertinaRules {
     private const val BUCKETS = 24
-    /** Below this the artwork is grey: Solco keeps the real sky. */
-    private const val GREY = 18f
+    /**
+     * Below this the artwork is grey: Solco keeps the real sky. 4 (26 Nov, was 18): a patch of
+     * strong colour about a hundredth of a dark sleeve is enough, so a quiet song on a black cover
+     * still shows in the grain; a black-and-white photo's compression noise scores about 0.2.
+     */
+    private const val GREY = 4f
 
     fun palette(px: IntArray): IntArray? {
         val score = FloatArray(BUCKETS); val r = FloatArray(BUCKETS); val g = FloatArray(BUCKETS); val bl = FloatArray(BUCKETS)
