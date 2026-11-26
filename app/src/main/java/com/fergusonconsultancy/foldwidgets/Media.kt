@@ -153,7 +153,8 @@ object Media {
         val (art, accent) = artCache?.takeIf { it.first == key }?.second ?: run {
             val a = artwork(c, meta)
             val pair = a to a?.let { Art.accent(it) }
-            artCache = key to pair
+            // Missing artwork is not kept: players often send it a moment after the track (26 Nov log)
+            if (a != null) artCache = key to pair
             pair
         }
         return NowPlaying(
@@ -172,17 +173,28 @@ object Media {
         if (meta == null) return null
         // Copertina's log (26 Nov 2026) records which key gave the artwork and at what size
         Copertina.source = ""
+        // The bitmap a player puts in the session can be a small thumbnail; a URI is usually the full
+        // sleeve. On 26 Nov Spotify's 300×300 bitmap gave muddy colours where its URI gave the sleeve's
+        // own, so the larger of the two is used when both are there.
+        var best: Bitmap? = null
         for (k in listOf(MediaMetadata.METADATA_KEY_ALBUM_ART, MediaMetadata.METADATA_KEY_ART, MediaMetadata.METADATA_KEY_DISPLAY_ICON)) {
-            meta.getBitmap(k)?.let { Copertina.source = "${k.substringAfterLast('.')} ${it.width}×${it.height}"; return Art.square(it, 512) }
+            meta.getBitmap(k)?.let { best = it; Copertina.source = "${k.substringAfterLast('.')} ${it.width}×${it.height}" }
+            if (best != null) break
         }
         for (k in listOf(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)) {
             val uri = meta.getString(k)?.takeIf { it.isNotBlank() } ?: continue
-            runCatching {
+            val u = runCatching {
                 val src = ImageDecoder.createSource(c.contentResolver, Uri.parse(uri))
                 ImageDecoder.decodeBitmap(src) { dec, _, _ -> dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE }
-            }.getOrNull()?.let { Copertina.source = "${k.substringAfterLast('.')} ${it.width}×${it.height}"; return Art.square(it, 512) }
+            }.getOrNull() ?: continue
+            val had = best
+            if (had == null || minOf(u.width, u.height) > minOf(had.width, had.height)) {
+                Copertina.source = (if (had != null) "${Copertina.source} → " else "") + "${k.substringAfterLast('.')} ${u.width}×${u.height}"
+                best = u
+            }
+            break
         }
-        return null
+        return best?.let { Art.square(it, 512) }
     }
 
     fun label(c: Context, pkg: String): String = runCatching {

@@ -47,9 +47,22 @@ object Copertina {
      * Called once the players' reports settle (MediaListener's redraw). Cheap when nothing changed:
      * the artwork and its colours are worked out once per track, in [Media.now].
      */
+    /** The track that was given a moment for its artwork to arrive (players often send the words first). */
+    @Volatile private var waited = ""
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
     fun update(c: Context) {
         val np = Media.now(c)
         val playing = np?.playing == true
+        // 26 Nov log: Spotify sends a new track without artwork, then the artwork a moment later.
+        // Wait up to 2.5 s for it rather than dropping Solco back to the finish and tinting again.
+        val track = np?.let { "${it.pkg}|${it.title}|${it.artist}|${it.album}" } ?: ""
+        if (playing && np?.art == null && waited != track) {
+            waited = track
+            val app = c.applicationContext
+            main.postDelayed({ Widgets.later { runCatching { update(app) } } }, 2500)
+            return
+        }
         val pal = if (playing) np?.art?.let { palette(it) } else null
         val a = pal?.get(0); val b = pal?.get(1)
         val player = np?.pkg ?: ""
@@ -61,6 +74,8 @@ object Copertina {
         log(c, buildString {
             append(if (playing) "playing" else "stopped")
             if (player.isNotEmpty()) append(" · ").append(player)
+            // Which track, so two sleeves giving the same colours can be told apart
+            if (playing && np != null) append(" · ").append(listOf(np.artist, np.title).filter { it.isNotBlank() }.joinToString(" – ").take(60))
             if (playing) {
                 append(" · ").append(if (np?.art == null) "no artwork" else source.ifEmpty { "artwork" })
                 append(" · ").append(if (a == null) "grey, no colours" else "#${hex(a)} #${hex(b ?: a)}")
