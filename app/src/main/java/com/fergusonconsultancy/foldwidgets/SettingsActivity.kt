@@ -191,6 +191,9 @@ class SettingsActivity : Activity() {
         // ---- Partenza (24 Nov 2026): leave by, hosted here for the family
         partenzaSection(column) { build() }
 
+        // ---- Copertina (26 Nov 2026): the sleeve's colours, shared with Solco
+        copertinaSection(column)
+
         // ---- Icons: the marks in the widgets come from the home screen's icon pack
         val packs = Icons.packs(this)
         if (packs.isNotEmpty()) {

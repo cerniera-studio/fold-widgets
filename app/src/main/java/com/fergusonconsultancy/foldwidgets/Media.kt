@@ -170,15 +170,17 @@ object Media {
 
     private fun artwork(c: Context, meta: MediaMetadata?): Bitmap? {
         if (meta == null) return null
+        // Copertina's log (26 Nov 2026) records which key gave the artwork and at what size
+        Copertina.source = ""
         for (k in listOf(MediaMetadata.METADATA_KEY_ALBUM_ART, MediaMetadata.METADATA_KEY_ART, MediaMetadata.METADATA_KEY_DISPLAY_ICON)) {
-            meta.getBitmap(k)?.let { return Art.square(it, 512) }
+            meta.getBitmap(k)?.let { Copertina.source = "${k.substringAfterLast('.')} ${it.width}×${it.height}"; return Art.square(it, 512) }
         }
         for (k in listOf(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)) {
             val uri = meta.getString(k)?.takeIf { it.isNotBlank() } ?: continue
             runCatching {
                 val src = ImageDecoder.createSource(c.contentResolver, Uri.parse(uri))
                 ImageDecoder.decodeBitmap(src) { dec, _, _ -> dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE }
-            }.getOrNull()?.let { return Art.square(it, 512) }
+            }.getOrNull()?.let { Copertina.source = "${k.substringAfterLast('.')} ${it.width}×${it.height}"; return Art.square(it, 512) }
         }
         return null
     }

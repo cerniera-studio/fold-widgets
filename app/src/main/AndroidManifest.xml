@@ -33,6 +33,8 @@
         <package android:name="com.cerniera.riserva" />
         <!-- Cielo, offered as what the weather widget opens -->
         <package android:name="com.fergusonconsultancy.cielo" />
+        <!-- Solco, told when Copertina's colours change (26 Nov 2026) -->
+        <package android:name="com.fergusonconsultancy.solco" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -104,6 +106,13 @@
         <provider
             android:name="com.cerniera.kit.PartenzaProvider"
             android:authorities="com.cerniera.partenza"
+            android:exported="true" />
+
+        <!-- Copertina (26 Nov 2026): the sleeve's two colours while music plays, for Solco's sky.
+             Only Cerniera's own apps may read it (checked in the provider). -->
+        <provider
+            android:name=".CopertinaProvider"
+            android:authorities="com.cerniera.copertina"
             android:exported="true" />
 
         <receiver
