@@ -217,7 +217,11 @@ class SettingsActivity : Activity() {
             if (f != null) { Prefs.setDefaultFinish(this, f); Prefs.followAll(this) }
             Widgets.later { Widgets.renderAll(this) }
         })
-        column.addView(label("Choosing here dresses every widget. To give one widget its own finish afterwards, hold it on the home screen and open its settings.",
+        // The family that wears it (26 Nov 2026): one look for every Cerniera widget on the phone
+        val family = Look.followers(this).map { Look.appName(this, it) }.sorted()
+        column.addView(label("Choosing here dresses every Cerniera widget, in Fold Widgets" +
+            (if (family.isEmpty()) "" else " and in " + family.joinToString(", ").replace(Regex(", ([^,]*)$"), " and $1")) +
+            ". Tapping the finish already chosen sends it to them all again. To give one Fold widget its own finish afterwards, hold it on the home screen and open its settings.",
             13f, Palette.MUTED).apply { setPadding(px(4), 0, px(4), 0) })
 
         // ---- Corners

@@ -31,6 +31,12 @@
         <package android:name="com.cerniera.dorso" />
         <!-- Riserva, whose gauge widget follows this app's look too (22 Nov 2026) -->
         <package android:name="com.cerniera.riserva" />
+        <!-- Settimana, whose week widget follows this app's look too (left out until 26 Nov 2026) -->
+        <package android:name="com.cerniera.settimana" />
+        <!-- Every app that wears this look, found by its receiver (26 Nov 2026), so a new one needs no change here -->
+        <intent>
+            <action android:name="com.cerniera.LOOK_CHANGED" />
+        </intent>
         <!-- Cielo, offered as what the weather widget opens -->
         <package android:name="com.fergusonconsultancy.cielo" />
         <!-- Solco, told when Copertina's colours change (26 Nov 2026) -->
@@ -95,7 +101,8 @@
             android:theme="@style/Pass" />
 
         <!-- Taps that act in place: play, skip, refresh -->
-        <!-- The look (finish, corners, glass images), shared read-only with Nodo's widget -->
+        <!-- The look (finish, corners, glass images), shared read-only with every family widget.
+             The look itself is open; the glass's picture and the widgets' places are family only (Look.kt) -->
         <provider
             android:name=".LookProvider"
             android:authorities="com.fergusonconsultancy.foldwidgets.look"

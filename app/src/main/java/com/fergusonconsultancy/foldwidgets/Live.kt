@@ -104,7 +104,9 @@ class LiveService : AccessibilityService() {
     private fun findWidgets(): Pair<List<Rect>, List<Follower>> {
         val out = ArrayList<Rect>(); val followers = ArrayList<Follower>()
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList())
-        for (r in roots) walk(r, out, followers, 0)
+        // Every app that wears this look, found afresh (26 Nov 2026: Settimana had been left out)
+        val known = Look.followers(this).map { "$it:id/root" to it }
+        for (r in roots) walk(r, out, followers, known, 0)
         fun Rect.key() = "${left},${top},${width()},${height()}"
         return out.distinctBy { it.key() } to followers.distinctBy { it.pkg + it.box.key() }
     }
@@ -116,16 +118,16 @@ class LiveService : AccessibilityService() {
      * Each is kept with the app it belongs to (21 Nov 2026: Dorso follows too, and each app must
      * take up only its own widgets' places).
      */
-    private fun walk(n: AccessibilityNodeInfo, out: MutableList<Rect>, followers: MutableList<Follower>, depth: Int) {
+    private fun walk(n: AccessibilityNodeInfo, out: MutableList<Rect>, followers: MutableList<Follower>, known: List<Pair<String, String>>, depth: Int) {
         if (depth > 40) return
         val name = n.viewIdResourceName
-        val follower = if (name == null) null else Look.FOLLOWERS.firstOrNull { name == "$it:id/root" }
+        val follower = if (name == null) null else known.firstOrNull { name == it.first }?.second
         if (name == "$packageName:id/root" || follower != null) {
             val b = Rect().also { n.getBoundsInScreen(it) }
             if (b.width() > 20 && b.height() > 20) { if (follower != null) followers += Follower(b, follower) else out += b }
             return
         }
-        for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it, out, followers, depth + 1) }
+        for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it, out, followers, known, depth + 1) }
     }
 
     companion object {
@@ -195,7 +197,7 @@ object Live {
         }
         // The followers' widgets: their places on this screen, and the wallpaper's place and tint
         val shared = Look.share(c, followers, sw, sh, view)
-        val byApp = followers.groupBy { Look.appName(it.pkg) }.entries.joinToString(", ") { "${it.value.size} ${it.key}" }
+        val byApp = followers.groupBy { Look.appName(c, it.pkg) }.entries.joinToString(", ") { "${it.value.size} ${it.key}" }
         note(c, "Last look: ${matched.size} of ${boxes.size} widgets found" + (if (followers.isNotEmpty()) ", $byApp" + (if (shared) " (passed on)" else "") else "") + ", " +
             (if (view == null) "wallpaper not matched" else "wallpaper at ${view.ox.toInt()}, ${view.oy.toInt()}") + ", $redrawn redrawn")
     }
