@@ -218,6 +218,27 @@ object Widgets {
     }
 
     /**
+     * The size widget [id] truly has on this screen, in dp, when a tap or live mode has measured it
+     * at the size the launcher reports now; else null.
+     *
+     * 27 Nov 2026: a launcher hands over the picture whose listed size best fits the real space, and
+     * Smart Launcher's listed sizes need not include the real one. An agenda on the main screen got
+     * its narrower portrait picture, shown shrunk to fit, while its rows filled the real width, so
+     * the date and the rows stood out past the finish's left and right edges (Mechack's screenshot).
+     * The picture drawn at the measured size is now listed at the measured size, so it is the one
+     * picked.
+     */
+    fun measuredSize(c: Context, id: Int): SizeF? {
+        val seat = Backdrop.seat(c, id) ?: return null
+        val screen = Backdrop.screenSize(c)
+        val r = reportedSize(c, id)
+        if (!seat.exact || seat.screenW != screen.x || seat.screenH != screen.y || seat.repW <= 0f || seat.repH <= 0f) return null
+        if (Math.abs(seat.repW - r.width) >= 1.5f || Math.abs(seat.repH - r.height) >= 1.5f) return null
+        val d = Backdrop.density(c)
+        return SizeF(seat.width / d, seat.height / d)
+    }
+
+    /**
      * The sizes the launcher has for widget [id], one per orientation (portrait first), in dp.
      * Empty when the launcher reports none.
      */
@@ -271,6 +292,7 @@ object Widgets {
         val (_, cpx, cpy) = drawn(current)
         val map = LinkedHashMap<SizeF, RemoteViews>()
         var listed = false
+        val measured = measuredSize(c, id)
         for (s in sizes) {
             val isNow = same(s, now)
             val frame = if (isNow) current else {
@@ -279,13 +301,16 @@ object Widgets {
                 val k = if (want > spare) Math.sqrt(spare / want.toDouble()).toFloat() else 1f
                 Frame(Math.round(s.width * d * k), Math.round(s.height * d * k), d * k)
             }
-            val (rv, l) = views(c, id, kind, frame, if (isNow) Backdrop.ground(c, id) else Backdrop.flatGround(c), s, isNow)
+            // The size in use is listed at its measured size, so the launcher picks it (27 Nov 2026)
+            val key = if (isNow && measured != null) measured else s
+            val (rv, l) = views(c, id, kind, frame, if (isNow) Backdrop.ground(c, id) else Backdrop.flatGround(c), key, isNow)
             listed = listed || l
-            map[s] = rv
+            map[key] = rv
         }
-        if (map.keys.none { same(it, now) }) {
+        if (map.keys.none { same(it, now) || (measured != null && same(it, measured)) }) {
             // The size in use isn't among those listed (a launcher mid-resize): draw it as well
-            map[now] = views(c, id, kind, current, Backdrop.ground(c, id), now, true).first
+            val key = measured ?: now
+            map[key] = views(c, id, kind, current, Backdrop.ground(c, id), key, true).first
         }
         m.updateAppWidget(id, RemoteViews(map))
         @Suppress("DEPRECATION")
