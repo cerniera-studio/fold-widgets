@@ -39,7 +39,8 @@ class LookProvider : ContentProvider() {
         // The glass's picture is always handed over (26 Nov 2026): the image chosen for that screen,
         // else a still of the system wallpaper, so every follower's glass shows the same picture as
         // Fold Widgets' own without asking for all-files access itself. "stamp" versions the look.
-        val wall = Backdrop.canReadWallpaper()
+        // A picture to hand over: the wallpaper with all-files access, or Solco's still of itself (27 Nov 2026)
+        val wall = Backdrop.canReadWallpaper() || com.cerniera.kit.Backdrop.solcoShowing(c)
         return MatrixCursor(arrayOf("finish", "radius", "image_cover", "image_main", "stamp")).apply {
             addRow(arrayOf<Any>(Prefs.defaultFinish(c).name, Prefs.radius(c),
                 if (p.getString("image_cover", null) != null || wall) 1 else 0, if (p.getString("image_main", null) != null || wall) 1 else 0,
@@ -57,7 +58,7 @@ class LookProvider : ContentProvider() {
         family(c)
         val key = when (uri.pathSegments.getOrNull(1) ?: uri.lastPathSegment) { "main" -> "image_main"; "cover" -> "image_cover"; else -> return null }
         Prefs.of(c).getString(key, null)?.let { return c.contentResolver.openFileDescriptor(Uri.parse(it), "r") }
-        val still = Look.wallpaperStill(c) ?: return null
+        val still = Look.wallpaperStill(c, key == "image_cover") ?: return null
         return ParcelFileDescriptor.open(still, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
@@ -109,7 +110,12 @@ object Look {
     }.getOrDefault(pkg.substringAfterLast('.').replaceFirstChar { it.uppercase() })
 
     /** The look's version: bumped on every change, so a follower never draws from a stale picture. */
-    fun stamp(c: Context): Long = Prefs.of(c).getLong(STAMP, 0L)
+    fun stamp(c: Context): Long {
+        val own = Prefs.of(c).getLong(STAMP, 0L)
+        // Over Solco, a new still is a new version of the look's picture too (27 Nov 2026)
+        if (!com.cerniera.kit.Backdrop.solcoShowing(c)) return own
+        return own + (com.cerniera.kit.SolcoStill.stamp(c, false) ?: 0L) % 1_000_000L + (com.cerniera.kit.SolcoStill.stamp(c, true) ?: 0L) % 1_000_000L
+    }
 
     /**
      * The look (or the wallpaper behind it) changed: a new version, and every follower is told to
@@ -129,12 +135,14 @@ object Look {
      * The system wallpaper as this app reads it, saved once per version of the look, for followers'
      * glass. Null without all-files access, when the followers take the wallpaper's colours instead.
      */
-    @Synchronized fun wallpaperStill(c: Context): java.io.File? {
+    @Synchronized fun wallpaperStill(c: Context, cover: Boolean = false): java.io.File? {
         val dir = java.io.File(c.cacheDir, "look").apply { mkdirs() }
-        val f = java.io.File(dir, "wall-${stamp(c)}.png")
+        val solco = com.cerniera.kit.Backdrop.solcoShowing(c)
+        val f = java.io.File(dir, "wall-${stamp(c)}" + (if (solco) (if (cover) "-cover" else "-main") else "") + ".png")
         if (f.length() > 0) return f
-        val bmp = com.cerniera.kit.Backdrop.systemWallpaper(c) ?: return null
-        dir.listFiles()?.forEach { it.delete() }
+        // Over Solco, its still of the screen asked for; else the system wallpaper (27 Nov 2026)
+        val bmp = (if (solco) com.cerniera.kit.SolcoStill.read(c, cover) else com.cerniera.kit.Backdrop.systemWallpaper(c)) ?: return null
+        dir.listFiles()?.filter { !it.name.startsWith("wall-${stamp(c)}") }?.forEach { it.delete() }
         val tmp = java.io.File(dir, "wall.tmp")
         runCatching { tmp.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; tmp.renameTo(f) }
             .onFailure { tmp.delete(); return null }

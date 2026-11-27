@@ -393,8 +393,18 @@ object WeatherPainter : Painter {
         cv.textTop(fit(words, wordsP, textW), left, p + placeP.textSize * 1.4f, wordsP)
         val topBlock = p + maxOf(placeP.textSize * 1.4f + wordsP.textSize * 1.2f, g)
 
-        val tempSize = if (tiny) minOf(s.h * 0.34f, w * 0.3f).coerceAtLeast(24f) else minOf(w * 0.30f, s.h * 0.2f, 84f).coerceAtLeast(44f)
-        val tempP = c.ink(tempSize, s.ink(left + 40f, topBlock + tempSize / 2), display = true)
+        // As large as the room allows, judged by the figure's own width (27 Nov 2026): it had been held
+        // to 30% of the width whatever it said, so a "2°" stood small with empty space beside it
+        val tempMax = if (tiny) minOf(s.h * 0.34f, w * 0.3f).coerceAtLeast(24f) else minOf(s.h * 0.34f, 150f).coerceAtLeast(44f)
+        var tempSize = tempMax
+        var tempP = c.ink(tempSize, s.ink(left + 40f, topBlock + tempSize / 2), display = true)
+        if (!tiny) {
+            // Room for the figure: the width beside nothing (the sky sits above, with the place), capped
+            // so the figure's ink stays within about a quarter of the widget's height
+            while (tempSize > 44f && (BigTemp.width(tempP, fc.temp) > w * 0.62f || capHeight(tempP) > s.h * 0.24f)) {
+                tempSize -= 2f; tempP = c.ink(tempSize, tempP.color, display = true)
+            }
+        }
         val capT = capHeight(tempP)
         val showRange = on(WeatherOptions.Item.RANGE) && !tiny
         val showFeels = on(WeatherOptions.Item.FEELS) && fc.feels != null && !tiny && w >= 200f

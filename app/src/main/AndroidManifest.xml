@@ -33,6 +33,8 @@
         <package android:name="com.cerniera.riserva" />
         <!-- Settimana, whose week widget follows this app's look too (left out until 26 Nov 2026) -->
         <package android:name="com.cerniera.settimana" />
+        <!-- Solco, whose still of itself is the glass's picture over it (27 Nov 2026) -->
+        <package android:name="com.fergusonconsultancy.solco" />
         <!-- Every app that wears this look, found by its receiver (26 Nov 2026), so a new one needs no change here -->
         <intent>
             <action android:name="com.cerniera.LOOK_CHANGED" />
@@ -125,6 +127,15 @@
         <receiver
             android:name=".TapReceiver"
             android:exported="false" />
+
+        <!-- Solco saved a new still of itself: the glass redraws over it, and the family is told (27 Nov 2026) -->
+        <receiver
+            android:name=".SolcoStillReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.cerniera.SOLCO_STILL" />
+            </intent-filter>
+        </receiver>
 
         <!-- Nodo and Dorso say something changed: Momento looks again (only ever a redraw) -->
         <receiver
