@@ -322,6 +322,24 @@ object Widgets {
             if (l) onListed()
             map[key] = rv
         }
+        if (measured == null && sizes.size >= 2) {
+            // A launcher stack's sizes (27 Nov 2026): when none of the listed sizes fits the real box,
+            // Android shows the smallest picture shrunk to fit, leaving bands beside it. A picture at
+            // what every listed size has in common (the narrowest width, the shortest height) always
+            // fits and is nearest the real shape. It is drawn dense enough to stay sharp when shown
+            // larger. Once a tap or live mode measures the widget, the measured picture takes over.
+            val inter = SizeF(sizes.minOf { it.width }, sizes.minOf { it.height })
+            if (map.keys.none { same(it, inter) }) {
+                val up = minOf(sizes.maxOf { it.width } / inter.width, sizes.maxOf { it.height } / inter.height).coerceIn(1f, 1.5f)
+                val spare = (budget - cpx.toLong() * cpy * 4).coerceAtLeast(budget / 4)
+                val want = inter.width * d * up * inter.height * d * up * 4
+                val k = if (want > spare) Math.sqrt(spare / want.toDouble()).toFloat() else 1f
+                val frame = Frame(Math.round(inter.width * d * up * k), Math.round(inter.height * d * up * k), d * up * k)
+                val (rv, l) = views(c, id, kind, frame, Backdrop.ground(c, id), inter, false)
+                if (l) onListed()
+                map[inter] = rv
+            }
+        }
         if (map.keys.none { same(it, now) || (measured != null && same(it, measured)) }) {
             // The size in use isn't among those listed (a launcher mid-resize): draw it as well
             val key = measured ?: now
