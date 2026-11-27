@@ -191,6 +191,9 @@ class SettingsActivity : Activity() {
         // ---- Partenza (24 Nov 2026): leave by, hosted here for the family
         partenzaSection(column) { build() }
 
+        // ---- Widget sizes (27 Nov 2026): what the launcher tells each widget against what it has
+        sizesSection(column)
+
         // ---- Copertina (26 Nov 2026): the sleeve's colours, shared with Solco
         copertinaSection(column)
 
