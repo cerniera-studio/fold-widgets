@@ -184,7 +184,7 @@ object Live {
             val seat = com.cerniera.kit.Backdrop.Seat(b.left.toFloat(), b.top.toFloat(), b.width().toFloat(), b.height().toFloat(), sw, sh, true, reported.width, reported.height)
             if (old == null || !old.exact || old.screenW != sw || old.screenH != sh || Math.abs(old.left - seat.left) > 2f || Math.abs(old.top - seat.top) > 2f ||
                 Math.abs(old.width - seat.width) > 1f || Math.abs(old.height - seat.height) > 1f || Math.abs(old.repW - seat.repW) > 1.5f || Math.abs(old.repH - seat.repH) > 1.5f) {
-                Prefs.of(c).edit().putString("seat_$id", seat.encode()).apply(); changed = true
+                com.cerniera.kit.Backdrop.put(Prefs.of(c).edit(), id, seat).apply(); changed = true
             }
             if (view != null) {
                 val was = viewOf(c, id)

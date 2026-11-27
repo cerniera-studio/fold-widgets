@@ -15,7 +15,7 @@ import com.cerniera.kit.Backdrop as KitBackdrop
  * The calls are the same as before, so the widgets didn't change.
  */
 object Backdrop {
-    fun seat(c: Context, id: Int): KitBackdrop.Seat? = KitBackdrop.seat(Prefs.of(c), id)
+    fun seat(c: Context, id: Int): KitBackdrop.Seat? = KitBackdrop.seat(c, Prefs.of(c), id)
 
     fun record(c: Context, intent: Intent, id: Int, hit: RectF?, sizeDp: SizeF?, root: Boolean, reported: SizeF): Boolean =
         KitBackdrop.record(c, Prefs.of(c), intent, id, hit, sizeDp, root, reported)

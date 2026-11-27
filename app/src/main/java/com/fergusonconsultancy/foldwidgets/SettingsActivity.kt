@@ -305,7 +305,7 @@ class SettingsActivity : Activity() {
             addView(row("Seating", if (seats.isEmpty()) "Add a widget to your home screen first"
                 else "$seated of ${seats.size} widgets know where they sit. Tap any part of a widget once and its glass lines up with the wallpaper behind it.",
                 if (seated > 0) button("Reset", primary = false) {
-                    seats.forEach { Prefs.of(this@SettingsActivity).edit().remove("seat_$it").apply() }
+                    seats.forEach { com.cerniera.kit.Backdrop.forget(Prefs.of(this@SettingsActivity), it) }
                     build(); Widgets.later { Widgets.renderAll(this@SettingsActivity) }
                 } else null))
             for ((key, name) in listOf("image_cover" to "Cover screen image", "image_main" to "Main screen image")) {
