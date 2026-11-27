@@ -281,7 +281,14 @@ object Widgets {
         if ((kind == Kind.MUSIC && MediaListener.instance != null) || sizes.size < 2) {
             var listed = false
             // Sent through the Kit's WidgetBudget (27 Nov 2026): a refusal is redrawn, never left standing
-            WidgetBudget.send(c, m, id) { views(c, id, kind, frameOf(c, id), Backdrop.ground(c, id), now, true).also { listed = it.second }.first }
+            // One picture (music while a player is followed redraws too often for more): with no measured
+            // size and sizes that disagree, drawn at their shared part, which fits any box the launcher
+            // gives (27 Nov 2026, the audit's stack scene), dense enough to stay sharp when enlarged
+            val shared = if (measuredSize(c, id) == null && sizes.size >= 2) com.cerniera.kit.WidgetSizes.withShared(sizes).lastOrNull()?.takeIf { it.second > 1f || sizes.none { s -> same(s, it.first) } } else null
+            val d = Backdrop.density(c)
+            val frame = shared?.let { (s, up) -> Frame(Math.round(s.width * d * up), Math.round(s.height * d * up), d * up) } ?: frameOf(c, id)
+            val key = shared?.first ?: now
+            WidgetBudget.send(c, m, id) { views(c, id, kind, frame, Backdrop.ground(c, id), key, true).also { listed = it.second }.first }
             @Suppress("DEPRECATION")
             if (listed) m.notifyAppWidgetViewDataChanged(id, R.id.list)
             return
