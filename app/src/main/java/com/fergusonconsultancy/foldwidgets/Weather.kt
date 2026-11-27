@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.location.LocationManager
 import org.json.JSONObject
@@ -266,13 +267,26 @@ object WeatherPainter : Painter {
         val p = if (minOf(s.w, s.h) >= 220f) 18f else if (minOf(s.w, s.h) >= 120f) 14f else 10f
 
         if (place == null || fc == null) {
-            val titleP = c.statement(s.ink(s.w / 2, s.h / 2))
-            canvas.textTop("Weather", p, p, titleP)
-            val noteP = c.ink(12.5f, s.muted(s.w / 2, s.h / 2), 450)
-            val note = if (place == null) "Tap to choose a place" else "Fetching ${place.name}…"
-            wrap(note, noteP, s.w - 2 * p, 2).forEachIndexed { i, l -> canvas.textTop(l, p, p + capHeight(titleP) + 12f + i * noteP.textSize * 1.3f, noteP) }
+            // The family's empty state (rule 8, 27 Nov 2026): the label at the top, the statement and its
+            // note resting on the foot, the sky's quiet form between. It had been a heading and a note
+            // at the top of an otherwise empty card, the widget audit's weather fault.
+            val G = com.cerniera.kit.Grammar
+            val k = G.scale(s.w, s.h); val ins = G.inset(s.w, s.h, k); val width = s.w - 2 * ins
+            val title = if (place == null) "Choose a place" else "Fetching ${place.name}"
+            val note = if (place == null) "Tap to set where the weather is for" else "The forecast arrives in a moment"
+            val tile = G.shape(s.w, s.h) == com.cerniera.kit.Grammar.Shape.TILE
+            val top = if (tile) ins else G.eyebrow(c, canvas, s, "Weather", ins, ins, width, k)
+            val restTop = G.statement(c, canvas, s, title, if (tile) null else note, ins, s.h - ins, width, k)
+            // The quiet sky, as large as the room between allows
+            val room = restTop - top - G.GAP * k
+            if (room > 28f * k) {
+                val g = minOf(room * 0.8f, width * 0.5f, 96f * k)
+                val gx = s.w - ins - g / 2; val gy = top + room / 2
+                val faint = (s.ink(gx, gy) and 0x00FFFFFF) or 0x40000000
+                Glyphs.sky(canvas, Glyphs.Sky.PARTLY, true, gx, gy, g, faint, (s.accent(gx, gy) and 0x00FFFFFF) or 0x66000000)
+            }
             val act = if (place == null) Act.Open(intent = Intent(c, SettingsActivity::class.java)) else Weather.openApp(c)
-            return Scene(listOf(Hit(all, act, "Weather")))
+            return Scene(listOf(Hit(all, act, "Weather: $title")))
         }
         fun on(i: WeatherOptions.Item) = WeatherOptions.on(c, id, i)
 
@@ -285,11 +299,10 @@ object WeatherPainter : Painter {
     private fun strip(c: Context, cv: Canvas, s: Surface, fc: Forecast, place: Place, p: Float, on: (WeatherOptions.Item) -> Boolean, weekFirst: Boolean) {
         val (words, sky) = Weather.describe(fc.code)
         val tempP = c.ink(minOf(s.h * 0.52f, 64f), s.ink(p + 30f, s.h / 2), display = true)
-        val temp = Weather.deg(fc.temp)
         val capT = capHeight(tempP)
-        val base = (s.h + capT) / 2f
-        cv.drawText(temp, p - 1f, base, tempP)
-        var x = p + tempP.measureText(temp) + 14f
+        val base = (s.h + capT - BigTemp.below(tempP, fc.temp)) / 2f
+        BigTemp.draw(cv, fc.temp, p - 1f, base, tempP)
+        var x = p + BigTemp.width(tempP, fc.temp) + 14f
         // Place, conditions and the range, stacked beside the temperature
         val placeP = c.ink(14.5f, s.ink(x + 40f, s.h / 2 - 12f), 600)
         val wordsP = c.meta(s.muted(x + 40f, s.h / 2 + 6f))
@@ -388,15 +401,17 @@ object WeatherPainter : Painter {
         val lineH = if (showRange || showFeels) 22f else 0f
         // In a column of its own the temperature sits at the foot; otherwise just under the place
         var base = if (fillTo != null) fillTo - lineH - 4f else topBlock + 14f + capT
-        cv.drawText(Weather.deg(fc.temp), left - 2f, base, tempP)
+        val tail = BigTemp.below(tempP, fc.temp)
+        if (fillTo != null) base -= tail
+        BigTemp.draw(cv, fc.temp, left - 2f, base, tempP)
         if (lineH > 0f) {
             val parts = ArrayList<String>()
             if (showRange) parts += "H ${Weather.deg(fc.high)}   L ${Weather.deg(fc.low)}"
             if (showFeels) parts += "Feels like ${Weather.deg(fc.feels!!)}"
             val lineP = c.meta(s.muted(left + 60f, base + 14f))
-            cv.drawText(fit(parts.joinToString("   ·   "), lineP, w), left, base + 10f + capHeight(lineP) + 4f, lineP)
+            cv.drawText(fit(parts.joinToString("   ·   "), lineP, w), left, base + tail + 10f + capHeight(lineP) + 4f, lineP)
         }
-        return if (tiny) -1f else topBlock + 14f + capT + 10f + lineH
+        return if (tiny) -1f else topBlock + 14f + capT + tail + 10f + lineH
     }
 
     /**
@@ -420,20 +435,21 @@ object WeatherPainter : Painter {
         // The temperature fills what is left, never past the foot
         var size = minOf(w * 0.5f, (bottom - top - lineH) * 0.9f, if (s.h >= 230f) 64f else 56f).coerceAtLeast(18f)
         var tempP = c.ink(size, s.ink(left + w * 0.3f, top + size / 2), display = true)
-        while (capHeight(tempP) + 4f > bottom - top - lineH && size > 18f) { size -= 2f; tempP = c.ink(size, tempP.color, display = true) }
+        while (BigTemp.inkHeight(tempP, fc.temp) + 4f > bottom - top - lineH && size > 18f) { size -= 2f; tempP = c.ink(size, tempP.color, display = true) }
         val capT = capHeight(tempP)
+        val tail = BigTemp.below(tempP, fc.temp)
         val base = top + 4f + capT
-        cv.drawText(Weather.deg(fc.temp), left - 1f, base, tempP)
-        val tw = tempP.measureText(Weather.deg(fc.temp))
+        BigTemp.draw(cv, fc.temp, left - 1f, base, tempP)
+        val tw = BigTemp.width(tempP, fc.temp)
         if (tw + g + 6f <= w) {
             val gx = right - g / 2; val gy = base - capT / 2
             Glyphs.sky(cv, sky, fc.day, gx, gy, g, s.ink(gx, gy), s.accent(gx, gy))
         }
         if (showRange) {
             val lineP = c.meta(s.muted(left + w / 2, base + 14f), 1f, 12f)
-            cv.drawText(fit("H ${Weather.deg(fc.high)}  L ${Weather.deg(fc.low)}", lineP, w), left, base + 8f + capHeight(lineP), lineP)
+            cv.drawText(fit("H ${Weather.deg(fc.high)}  L ${Weather.deg(fc.low)}", lineP, w), left, base + tail + 8f + capHeight(lineP), lineP)
         }
-        val end = base + lineH + 10f
+        val end = base + tail + lineH + 10f
         return if (bottom - end >= 3 * 26f + 14f) end else -1f
     }
 
@@ -461,12 +477,12 @@ object WeatherPainter : Painter {
         val lineP = c.meta(s.muted(p + w / 2, s.h - p - 6f), k)
         val lineH = if (parts.isEmpty()) 0f else lineP.textSize * 1.6f
         val bottom = s.h - p - lineH
-        val temp = Weather.deg(fc.temp)
-        // As large as fits both the height left and the width
+        // As large as fits both the height left and the width, judged by the figures' real ink, tails included
+        val gapFoot = 8f * k
         var size = 200f * k
         var tp = c.ink(size, s.ink(p + w / 3, (top + bottom) / 2), display = true)
-        while (size > 24f && (capHeight(tp) > bottom - top || tp.measureText(temp) > w)) { size -= 2f; tp = c.ink(size, tp.color, display = true) }
-        cv.drawText(temp, p - size * 0.03f, bottom, tp)
+        while (size > 24f && (BigTemp.inkHeight(tp, fc.temp) > bottom - top - gapFoot || BigTemp.width(tp, fc.temp) > w)) { size -= 2f; tp = c.ink(size, tp.color, display = true) }
+        BigTemp.draw(cv, fc.temp, p - size * 0.03f, bottom - gapFoot - BigTemp.below(tp, fc.temp), tp)
         if (parts.isNotEmpty()) {
             var text = parts.joinToString("   ·   ")
             if (lineP.measureText(text) > w) text = parts.first()
@@ -673,5 +689,36 @@ object WeatherPainter : Painter {
             fc.nextSunrise != null -> "Sunrise" to show(hm(fc.nextSunrise))
             else -> null
         }
+    }
+}
+
+/**
+ * The temperature as the widget's one large figure (27 Nov 2026): Italiana's figures with the degree
+ * drawn as a small ring. Italiana's own ° stands as tall as the figures' x-height, so at the hero's
+ * size it read as a letter o beside the 3 (Mechack's screenshot, Ottone). And Italiana's figures are
+ * old-style: a 3, 4, 5, 7 or 9 drops below the line, so the figure is placed by its real ink, not by
+ * the capital H, and its tail can no longer run through the range line beneath it.
+ */
+object BigTemp {
+    fun number(t: Double) = "${Math.round(t)}"
+    private fun cap(p: Paint) = capHeight(p)
+    private fun ringD(p: Paint) = cap(p) * 0.22f
+    private fun gap(p: Paint) = cap(p) * 0.07f
+    fun width(p: Paint, t: Double) = p.measureText(number(t)) + gap(p) + ringD(p)
+    private fun ink(p: Paint, t: Double): Rect { val r = Rect(); val n = number(t); p.getTextBounds(n, 0, n.length, r); return r }
+    /** How far the figures reach below the baseline (0 for lining figures). */
+    fun below(p: Paint, t: Double): Float = maxOf(0f, ink(p, t).bottom.toFloat())
+    /** The ink's full height: from the top of the tallest figure (or the ring) to the lowest tail. */
+    fun inkHeight(p: Paint, t: Double): Float = ink(p, t).let { maxOf(-it.top.toFloat(), cap(p)) + maxOf(0f, it.bottom.toFloat()) }
+    fun draw(cv: Canvas, t: Double, x: Float, base: Float, p: Paint) {
+        val n = number(t)
+        cv.drawText(n, x, base, p)
+        val d = ringD(p)
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; color = p.color; strokeWidth = maxOf(1f, p.textSize * 0.028f)
+        }
+        val cx = x + p.measureText(n) + gap(p) + d / 2f
+        val cy = base - cap(p) + d / 2f
+        cv.drawCircle(cx, cy, d / 2f - ring.strokeWidth / 2f, ring)
     }
 }

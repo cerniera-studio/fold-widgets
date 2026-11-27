@@ -10,11 +10,15 @@
     android:layoutDirection="ltr"
     android:clipToOutline="true">
 
+    <!-- The finish behind a list fills the very box the head, rows and foot fill (27 Nov 2026).
+         fitCenter had shrunk it when the launcher's space and the picture disagreed, leaving the
+         date and rows standing past its edges. It carries no words over the list, so it is never
+         a word that would stretch; and once the widget is measured the two agree exactly. -->
     <ImageView
         android:id="@+id/face"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="fitCenter"
+        android:scaleType="fitXY"
         android:importantForAccessibility="no" />
 
     <ProgressBar
