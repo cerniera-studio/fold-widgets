@@ -274,7 +274,7 @@ object WeatherPainter : Painter {
             val k = G.scale(s.w, s.h); val ins = G.inset(s.w, s.h, k); val width = s.w - 2 * ins
             val title = if (place == null) "Choose a place" else "Fetching ${place.name}"
             val note = if (place == null) "Tap to set where the weather is for" else "The forecast arrives in a moment"
-            val tile = G.shape(s.w, s.h) == G.Shape.TILE
+            val tile = G.shape(s.w, s.h) == com.cerniera.kit.Grammar.Shape.TILE
             val top = if (tile) ins else G.eyebrow(c, canvas, s, "Weather", ins, ins, width, k)
             val restTop = G.statement(c, canvas, s, title, if (tile) null else note, ins, s.h - ins, width, k)
             // The quiet sky, as large as the room between allows
