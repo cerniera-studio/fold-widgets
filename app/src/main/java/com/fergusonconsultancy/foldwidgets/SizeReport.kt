@@ -23,6 +23,20 @@ object SizeReport {
         val out = ArrayList<String>()
         out += "Screen now: ${screen.x}×${screen.y} px (${dp(SizeF(screen.x / d, screen.y / d))} dp), ${if (screen.y >= screen.x) "portrait" else "landscape"}, density ${"%.3f".format(d)}"
         out += "Launcher: ${runCatching { c.packageManager.resolveActivity(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName }.getOrNull() ?: "?"}"
+        // Which builds are installed and what the glass can see (27 Nov 2026): a stack mixing builds
+        // drew two looks side by side, and the report couldn't say so
+        val pm = c.packageManager
+        fun build(pkg: String) = runCatching { pm.getPackageInfo(pkg, 0).let { "${it.versionName ?: "?"} (${it.longVersionCode})" } }.getOrDefault("not installed")
+        out += "Builds: " + listOf("Fold Widgets" to c.packageName, "Nodo" to "com.cerniera.nodo", "Dorso" to "com.cerniera.dorso",
+            "Riserva" to "com.cerniera.riserva", "Settimana" to "com.cerniera.settimana", "Solco" to com.cerniera.kit.SolcoStill.PACKAGE)
+            .joinToString(", ") { (n, p) -> "$n ${build(p)}" }
+        val live = com.cerniera.kit.Backdrop.liveWallpaper(c)
+        val cover = screen.y > screen.x * 1.6f || screen.x > screen.y * 1.6f
+        out += "Wallpaper: " + when {
+            !live -> "a still picture"
+            com.cerniera.kit.Backdrop.solcoShowing(c) -> "Solco, live; its still " + (if (com.cerniera.kit.SolcoStill.stamp(c, cover) != null) "is readable, so the glass sees it" else "is not readable yet, so the glass can't see it")
+            else -> "live (${runCatching { android.app.WallpaperManager.getInstance(c).wallpaperInfo?.packageName }.getOrNull() ?: "?"}), which no app can see"
+        }
         for (kind in Kind.entries) for (id in Widgets.ids(c, kind)) {
             val o = m.getAppWidgetOptions(id)
             @Suppress("DEPRECATION")

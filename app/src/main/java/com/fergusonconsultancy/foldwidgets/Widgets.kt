@@ -209,11 +209,10 @@ object Widgets {
             // Measured at this very size: draw to the measured pixels
             if (Math.abs(seat.repW - r.width) < 1.5f && Math.abs(seat.repH - r.height) < 1.5f)
                 return Frame(Math.round(seat.width), Math.round(seat.height), d)
-            // Resized since (31 Oct): the old measurement no longer applies. Carry over how far the
-            // launcher's report was from the truth, which is the same at every size, until a tap
-            // measures the new size exactly
-            val fx = seat.width / (seat.repW * d); val fy = seat.height / (seat.repH * d)
-            return Frame(Math.round(r.width * d * fx), Math.round(r.height * d * fy), d)
+            // Resized since: the old measurement no longer applies. Until 27 Nov the launcher's error was
+            // carried over as a ratio, but in a Smart Launcher stack it isn't the same at every size
+            // (the agenda measured 154x139 when told 192x165 was then drawn 154x226 when told
+            // 192x268, Mechack's report), so the report is used until a tap measures the new size
         }
         return Frame(Math.round(r.width * d), Math.round(r.height * d), d)
     }
