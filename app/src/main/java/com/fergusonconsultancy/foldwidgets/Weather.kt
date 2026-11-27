@@ -267,13 +267,26 @@ object WeatherPainter : Painter {
         val p = if (minOf(s.w, s.h) >= 220f) 18f else if (minOf(s.w, s.h) >= 120f) 14f else 10f
 
         if (place == null || fc == null) {
-            val titleP = c.statement(s.ink(s.w / 2, s.h / 2))
-            canvas.textTop("Weather", p, p, titleP)
-            val noteP = c.ink(12.5f, s.muted(s.w / 2, s.h / 2), 450)
-            val note = if (place == null) "Tap to choose a place" else "Fetching ${place.name}…"
-            wrap(note, noteP, s.w - 2 * p, 2).forEachIndexed { i, l -> canvas.textTop(l, p, p + capHeight(titleP) + 12f + i * noteP.textSize * 1.3f, noteP) }
+            // The family's empty state (rule 8, 27 Nov 2026): the label at the top, the statement and its
+            // note resting on the foot, the sky's quiet form between. It had been a heading and a note
+            // at the top of an otherwise empty card, the widget audit's weather fault.
+            val G = com.cerniera.kit.Grammar
+            val k = G.scale(s.w, s.h); val ins = G.inset(s.w, s.h, k); val width = s.w - 2 * ins
+            val title = if (place == null) "Choose a place" else "Fetching ${place.name}"
+            val note = if (place == null) "Tap to set where the weather is for" else "The forecast arrives in a moment"
+            val tile = G.shape(s.w, s.h) == G.Shape.TILE
+            val top = if (tile) ins else G.eyebrow(c, canvas, s, "Weather", ins, ins, width, k)
+            val restTop = G.statement(c, canvas, s, title, if (tile) null else note, ins, s.h - ins, width, k)
+            // The quiet sky, as large as the room between allows
+            val room = restTop - top - G.GAP * k
+            if (room > 28f * k) {
+                val g = minOf(room * 0.8f, width * 0.5f, 96f * k)
+                val gx = s.w - ins - g / 2; val gy = top + room / 2
+                val faint = (s.ink(gx, gy) and 0x00FFFFFF) or 0x40000000
+                Glyphs.sky(canvas, Glyphs.Sky.PARTLY, true, gx, gy, g, faint, (s.accent(gx, gy) and 0x00FFFFFF) or 0x66000000)
+            }
             val act = if (place == null) Act.Open(intent = Intent(c, SettingsActivity::class.java)) else Weather.openApp(c)
-            return Scene(listOf(Hit(all, act, "Weather")))
+            return Scene(listOf(Hit(all, act, "Weather: $title")))
         }
         fun on(i: WeatherOptions.Item) = WeatherOptions.on(c, id, i)
 

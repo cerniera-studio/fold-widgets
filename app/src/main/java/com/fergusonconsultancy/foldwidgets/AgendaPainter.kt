@@ -275,10 +275,8 @@ object AgendaPainter : Painter {
             titleP.color = s.ink(titleX + 30f, firstMid)
             canvas.drawText(fit(o.title, titleP, s.w - p - titleX), titleX, firstMid + capHeight(titleP) / 2, titleP)
             if (detailed) {
-                val range = fmt.format(java.util.Date(o.begin)) + " – " + fmt.format(java.util.Date(o.end))
-                val detail = if (o.location.isNotEmpty()) "$range  ·  ${o.location}" else range
                 detailP.color = s.muted(titleX + 30f, firstMid + 17f)
-                canvas.drawText(fit(detail, detailP, s.w - p - titleX), titleX, firstMid + 17f + capHeight(detailP) / 2, detailP)
+                canvas.drawText(fitWords(detail(c, o), detailP, s.w - p - titleX), titleX, firstMid + 17f + capHeight(detailP) / 2, detailP)
             }
             if (hits.size < 12) hits += Hit(RectF(x0 - 4f, y - 3f, s.w, y + thisRow - 3f), Act.Open(intent = Agenda.openEvent(c, o)), o.title)
             y += thisRow
@@ -294,8 +292,38 @@ object AgendaPainter : Painter {
     /** The measures the scrolling list shares with the widget. */
     class RowStyle(val x0: Float, val tall: Boolean, val timeW: Float) {
         val labelH = 11f + 9f
-        fun height(o: Occurrence?, first: Boolean) = if (o == null) labelH + (if (first) 0f else 9f) else if (o.allDay) 27f else if (tall) 40f else 27f
+        /** A title set on [lines] lines adds a line's height to the row (27 Nov 2026). */
+        fun height(o: Occurrence?, first: Boolean, lines: Int = 1) =
+            if (o == null) labelH + (if (first) 0f else 9f) else (if (o.allDay) 27f else if (tall) 40f else 27f) + TITLE_LEAD * (lines.coerceIn(1, 2) - 1)
     }
+
+    /** Height of a second title line. */
+    const val TITLE_LEAD = 17f
+
+    private fun titlePaint(c: Context, colour: Int) = c.ink(14.5f, colour, 450)
+
+    /**
+     * An event's title on up to two lines of whole words, in a row [width] dp wide (27 Nov 2026). It had
+     * been one line cut at about fifteen characters ("Arsenal vs Bourn…") with room for a second
+     * beneath it: the widget audit's agenda fault.
+     */
+    fun titleLines(c: Context, st: RowStyle, o: Occurrence, width: Float, margin: Float): List<String> {
+        val titleX = if (o.allDay) st.x0 + 11f else st.x0 + 11f + st.timeW
+        return wrap(o.title, titlePaint(c, 0), (width - margin - titleX).coerceAtLeast(20f), 2)
+    }
+
+    /**
+     * The line beneath a timed event: when it ends and where, never its start again (the start
+     * already leads the row in bold; the audit found it said twice, the second time cut off).
+     */
+    fun detail(c: Context, o: Occurrence): String {
+        val fmt = android.text.format.DateFormat.getTimeFormat(c)
+        val until = "Until " + fmt.format(java.util.Date(o.end))
+        return if (o.location.isNotEmpty()) "$until  ·  ${o.location}" else until
+    }
+
+    /** [s] cut at a whole word, with an ellipsis, to [width]; one long word is cut as before. */
+    private fun fitWords(s: String, p: android.text.TextPaint, width: Float): String = wrap(s, p, width, 1).firstOrNull() ?: ""
 
     /** [detailed]: Agenda · Detailed gives every timed event its range and place; Agenda · List never does (1 Nov). */
     fun rowStyle(c: Context, s: Surface, detailed: Boolean): RowStyle {
@@ -315,12 +343,14 @@ object AgendaPainter : Painter {
 
     /** One event as a row of the scrolling list, [width] dp wide. */
     fun paintEvent(c: Context, cv: Canvas, s: Surface, st: RowStyle, o: Occurrence, width: Float, sampleY: Float) {
-        val p = if (minOf(s.w, s.h) >= 220f) 18f else 15f
+        val p = margin(s)
         val now = System.currentTimeMillis()
         val fmt = android.text.format.DateFormat.getTimeFormat(c)
         val firstMid = 9f
         val detailed = st.tall && !o.allDay
-        cv.drawRoundRect(RectF(st.x0, 1f, st.x0 + 3f, if (detailed) 32f else 17f), 1.5f, 1.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = o.colour })
+        val lines = titleLines(c, st, o, width, p)
+        val extra = TITLE_LEAD * (lines.size - 1)
+        cv.drawRoundRect(RectF(st.x0, 1f, st.x0 + 3f, extra + if (detailed) 32f else 17f), 1.5f, 1.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = o.colour })
         val tx0 = st.x0 + 11f
         val time = when { o.allDay -> ""; o.begin <= now -> "Now"; else -> fmt.format(java.util.Date(o.begin)) }
         val titleX = if (time.isEmpty()) tx0 else tx0 + st.timeW
@@ -328,15 +358,16 @@ object AgendaPainter : Painter {
             val timeP = c.ink(14.5f, s.ink(tx0, sampleY), 600)
             cv.drawText(fit(time, timeP, st.timeW), tx0, firstMid + capHeight(timeP) / 2, timeP)
         }
-        val titleP = c.ink(14.5f, s.ink(titleX + 30f, sampleY), 450)
-        cv.drawText(fit(o.title, titleP, width - p - titleX), titleX, firstMid + capHeight(titleP) / 2, titleP)
+        val titleP = titlePaint(c, s.ink(titleX + 30f, sampleY))
+        lines.forEachIndexed { i, l -> cv.drawText(l, titleX, firstMid + i * TITLE_LEAD + capHeight(titleP) / 2, titleP) }
         if (detailed) {
-            val range = fmt.format(java.util.Date(o.begin)) + " – " + fmt.format(java.util.Date(o.end))
-            val detail = if (o.location.isNotEmpty()) "$range  ·  ${o.location}" else range
             val detailP = c.meta(s.muted(titleX + 30f, sampleY))
-            cv.drawText(fit(detail, detailP, width - p - titleX), titleX, firstMid + 17f + capHeight(detailP) / 2, detailP)
+            cv.drawText(fitWords(detail(c, o), detailP, width - p - titleX), titleX, firstMid + extra + 17f + capHeight(detailP) / 2, detailP)
         }
     }
+
+    /** The row's right margin, as the widget's. */
+    fun margin(s: Surface) = if (minOf(s.w, s.h) >= 220f) 18f else 15f
 
     /** TODAY, TOMORROW, then MON 2 NOV. */
     private fun dayName(key: Int): String {
