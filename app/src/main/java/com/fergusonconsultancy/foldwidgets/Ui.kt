@@ -171,7 +171,8 @@ class FinishTile(c: Context, val finish: Finish?, var chosen: Boolean, onPick: (
         addView(c.label(finish?.short ?: "Follow app", 12.5f, if (chosen) Palette.CHAMPAGNE else Palette.MUTED, 500).apply {
             setPadding(c.px(2), c.px(8), 0, 0)
         })
-        if (finish == null) addView(c.label("App finish: ${Prefs.defaultFinish(c).short}", 11f, Palette.MUTED, 400).apply { setPadding(c.px(2), c.px(2), 0, 0) })
+        // A line on what each finish is (28 Nov 2026)
+        addView(c.label(if (finish == null) "App finish: ${Prefs.defaultFinish(c).short}" else finish.about, 11f, Palette.MUTED, 400).apply { setPadding(c.px(2), c.px(2), 0, 0) })
         setOnClickListener { onPick(finish) }
     }
 }

@@ -82,13 +82,12 @@ object Look {
     const val NODO = "com.cerniera.nodo"
     const val DORSO = "com.cerniera.dorso"
     const val RISERVA = "com.cerniera.riserva"
-    const val SETTIMANA = "com.cerniera.settimana"
     /** Known followers, told even if the phone hides them from the search below. */
-    private val KNOWN = listOf(NODO, DORSO, RISERVA, SETTIMANA)
+    private val KNOWN = listOf(NODO, DORSO, RISERVA)
 
     /**
      * Every app that wears this look (26 Nov 2026): every Cerniera app with a receiver for
-     * [CHANGED]. It was a fixed list, and the list stopped at Riserva, so Settimana's widget was
+     * [CHANGED]. It was a fixed list, and the list could miss an app, whose widget was
      * never told when the finish changed and stayed in whatever it last drew. Now an app joins by
      * declaring the receiver; nothing here has to change.
      */

@@ -28,7 +28,7 @@ object SizeReport {
         val pm = c.packageManager
         fun build(pkg: String) = runCatching { pm.getPackageInfo(pkg, 0).let { "${it.versionName ?: "?"} (${it.longVersionCode})" } }.getOrDefault("not installed")
         out += "Builds: " + listOf("Fold Widgets" to c.packageName, "Nodo" to "com.cerniera.nodo", "Dorso" to "com.cerniera.dorso",
-            "Riserva" to "com.cerniera.riserva", "Settimana" to "com.cerniera.settimana", "Solco" to com.cerniera.kit.SolcoStill.PACKAGE)
+            "Riserva" to "com.cerniera.riserva", "Solco" to com.cerniera.kit.SolcoStill.PACKAGE)
             .joinToString(", ") { (n, p) -> "$n ${build(p)}" }
         val live = com.cerniera.kit.Backdrop.liveWallpaper(c)
         val cover = screen.y > screen.x * 1.6f || screen.x > screen.y * 1.6f

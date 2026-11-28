@@ -31,8 +31,6 @@
         <package android:name="com.cerniera.dorso" />
         <!-- Riserva, whose gauge widget follows this app's look too (22 Nov 2026) -->
         <package android:name="com.cerniera.riserva" />
-        <!-- Settimana, whose week widget follows this app's look too (left out until 26 Nov 2026) -->
-        <package android:name="com.cerniera.settimana" />
         <!-- Solco, whose still of itself is the glass's picture over it (27 Nov 2026) -->
         <package android:name="com.fergusonconsultancy.solco" />
         <!-- Every app that wears this look, found by its receiver (26 Nov 2026), so a new one needs no change here -->

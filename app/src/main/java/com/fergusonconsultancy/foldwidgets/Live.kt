@@ -104,7 +104,7 @@ class LiveService : AccessibilityService() {
     private fun findWidgets(): Pair<List<Rect>, List<Follower>> {
         val out = ArrayList<Rect>(); val followers = ArrayList<Follower>()
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList())
-        // Every app that wears this look, found afresh (26 Nov 2026: Settimana had been left out)
+        // Every app that wears this look, found afresh
         val known = Look.followers(this).map { "$it:id/root" to it }
         for (r in roots) walk(r, out, followers, known, 0)
         fun Rect.key() = "${left},${top},${width()},${height()}"
@@ -182,6 +182,8 @@ object Live {
             val reported = Widgets.reportedSize(c, id)
             val old = Backdrop.seat(c, id)
             val seat = com.cerniera.kit.Backdrop.Seat(b.left.toFloat(), b.top.toFloat(), b.width().toFloat(), b.height().toFloat(), sw, sh, true, reported.width, reported.height)
+            // A sliver seen mid-swipe in a stack is not the widget (28 Nov 2026)
+            if (!com.cerniera.kit.Backdrop.plausible(seat.width, seat.height, reported, Backdrop.density(c))) continue
             if (old == null || !old.exact || old.screenW != sw || old.screenH != sh || Math.abs(old.left - seat.left) > 2f || Math.abs(old.top - seat.top) > 2f ||
                 Math.abs(old.width - seat.width) > 1f || Math.abs(old.height - seat.height) > 1f || Math.abs(old.repW - seat.repW) > 1.5f || Math.abs(old.repH - seat.repH) > 1.5f) {
                 com.cerniera.kit.Backdrop.put(Prefs.of(c).edit(), id, seat).apply(); changed = true

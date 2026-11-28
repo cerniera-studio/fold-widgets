@@ -216,7 +216,7 @@ class SettingsActivity : Activity() {
 
         // ---- Finish
         column.addView(eyebrow("Finish"))
-        column.addView(finishGrid(Finish.entries.toList(), { it == Prefs.defaultFinish(this) }) { f ->
+        column.addView(finishGrid(Finish.alphabetical(), { it == Prefs.defaultFinish(this) }) { f ->
             if (f != null) { Prefs.setDefaultFinish(this, f); Prefs.followAll(this) }
             Widgets.later { Widgets.renderAll(this) }
         })
@@ -462,7 +462,7 @@ class ConfigureActivity : Activity() {
         Widgets.kindOf(this, id)?.let { k -> column.addView(label(Widgets.describe(this, id, k), 14f, Palette.CHAMPAGNE, 500).apply { setPadding(0, px(6), 0, 0) }) }
         column.addView(label("Its finish and what it shows. Follow app keeps this widget in the finish chosen for the whole app.", 14f, Palette.MUTED).apply { setPadding(0, px(8), 0, 0) })
         column.addView(eyebrow("Finish"))
-        column.addView(finishGrid(listOf<Finish?>(null) + Finish.entries,
+        column.addView(finishGrid(listOf<Finish?>(null) + Finish.alphabetical(),
             { f -> if (f == null) !Prefs.hasOwnFinish(this, id) else Prefs.hasOwnFinish(this, id) && Prefs.finish(this, id) == f }) { f ->
             Prefs.setFinish(this, id, f)
             Widgets.later { Widgets.render(this, id) }
